@@ -281,7 +281,24 @@ function App() {
         if (!beltStartPos) {
           setPreviewPosition({ x, y })
           const hasOut = !!findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
-          stage.container().style.cursor = hasOut ? 'default' : 'not-allowed'
+          if (!hasOut) {
+            const clickedMachine = factory.machines.find(pm => {
+              const def = machineRegistry.get(pm.type)
+              if (!def) return false
+              const w = pm.rotate % 180 === 0 ? def.width : def.height
+              const h = pm.rotate % 180 === 0 ? def.height : def.width
+              return x >= pm.x && x < pm.x + w && y >= pm.y && y < pm.y + h
+            })
+            if (clickedMachine) {
+              const def = machineRegistry.get(clickedMachine.type)
+              const hasOutPort = def?.ports.some(p => p.port === 'OUT')
+              stage.container().style.cursor = hasOutPort ? 'default' : 'not-allowed'
+            } else {
+              stage.container().style.cursor = 'not-allowed'
+            }
+          } else {
+            stage.container().style.cursor = 'default'
+          }
         } else {
           setBeltEndPos({ x, y })
           const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
@@ -358,6 +375,45 @@ function App() {
             return
           }
         }
+      }
+
+      const clickedMachine = factory.machines.find(pm => {
+        const def = machineRegistry.get(pm.type)
+        if (!def) return false
+        const w = pm.rotate % 180 === 0 ? def.width : def.height
+        const h = pm.rotate % 180 === 0 ? def.height : def.width
+        return previewPosition.x >= pm.x && previewPosition.x < pm.x + w &&
+          previewPosition.y >= pm.y && previewPosition.y < pm.y + h
+      })
+      if (clickedMachine) {
+        const def = machineRegistry.get(clickedMachine.type)
+        if (def) {
+          const allDirs: Dir[] = ['N', 'E', 'S', 'W']
+          const candidates: { dir: Dir; x: number; y: number }[] = []
+          for (const port of def.ports) {
+            if (port.port !== 'OUT') continue
+            const portWorldX = clickedMachine.x + port.x
+            const portWorldY = clickedMachine.y + port.y
+            let dir: Dir = port.orientation as Dir
+            if (clickedMachine.rotate % 360 !== 0) {
+              const idx = allDirs.indexOf(dir)
+              dir = allDirs[(idx + clickedMachine.rotate / 90) % 4]
+            }
+            const tx = portWorldX + DIR_DX[dir]
+            const ty = portWorldY + DIR_DY[dir]
+            if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS && !isCellOccupied(tx, ty, factory.machines)) {
+              candidates.push({ dir, x: tx, y: ty })
+            }
+          }
+          const priority: Dir[] = ['S', 'E', 'N', 'W']
+          const best = priority.map(d => candidates.find(c => c.dir === d)).find(Boolean)
+          if (best) {
+            setBeltStartPos({ x: best.x, y: best.y })
+            setBeltStartDir(best.dir)
+            return
+          }
+        }
+        return
       }
 
       const outPort = findAdjacentOutPort(previewPosition.x, previewPosition.y, factory.machines, ['S', 'E', 'N', 'W'])
