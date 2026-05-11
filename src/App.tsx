@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Stage, Layer, Line } from 'react-konva'
+import { Stage, Layer, Line, Rect } from 'react-konva'
 import type { Stage as StageType } from 'konva/lib/Stage'
 import { machineRegistry } from './types/Machine'
 import type { Factory } from './types/Factory'
@@ -117,6 +117,18 @@ function App() {
   }
 
   const lines = []
+
+  // Grid background
+  lines.push(
+    <Rect
+      key="grid-bg"
+      x={offsetX}
+      y={offsetY}
+      width={gridWidth}
+      height={gridHeight}
+      fill="#7f7f7f"
+    />
+  )
 
   // Vertical lines
   for (let i = 0; i <= GRID_COLS; i++) {

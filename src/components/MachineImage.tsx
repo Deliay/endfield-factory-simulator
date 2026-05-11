@@ -27,29 +27,39 @@ function SideImageRenderer({ side, sideImg, machineWidth, machineHeight, cellSiz
 
   let x = 0
   let y = 0
-  let width = cellSize
-  let height = cellSize
+  let width: number | undefined = cellSize
+  let height: number | undefined = cellSize
+  let oX = width > 0 ? width / 2 : undefined
+  let oY = height > 0 ? height / 2 : undefined
 
   switch (side) {
     case 'north':
       x = 0
       y = -machineHeight / 2 + height / 2
       width = machineWidth
+      oX = width > 0 ? width / 2 : undefined
+      height = cellSize / 1.5
       break
     case 'south':
       x = 0
       y = machineHeight / 2 - height / 2
       width = machineWidth
+      oX = width > 0 ? width / 2 : undefined
+      height = cellSize / 1.5
       break
     case 'east':
       x = machineWidth / 2 - width / 2
       y = 0
+      width = cellSize / 1.5
       height = machineHeight
+      oY = height > 0 ? height / 2 : undefined
       break
     case 'west':
       x = -machineWidth / 2 + width / 2
       y = 0
+      width = cellSize / 1.5
       height = machineHeight
+      oY = height > 0 ? height / 2 : undefined
       break
   }
 
@@ -61,8 +71,8 @@ function SideImageRenderer({ side, sideImg, machineWidth, machineHeight, cellSiz
       width={width}
       height={height}
       rotation={rotate}
-      offsetX={width / 2}
-      offsetY={height / 2}
+      offsetX={oX}
+      offsetY={oY}
     />
   )
 }
@@ -99,8 +109,8 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
           y={-height / 2 + 8}
           width={width - 16}
           height={height - 16}
-          stroke="#666"
-          strokeWidth={4}
+          stroke="#000"
+          strokeWidth={2}
         />
       )}
       {definition.northSideImg && (
