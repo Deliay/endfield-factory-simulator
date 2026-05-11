@@ -122,6 +122,36 @@ machineRegistry.register({
 - 北侧 3 个输入端口，东侧 3 个输出端口
 - 无背景图，显示方框
 
+## 碰撞检测
+
+### getOccupiedCells
+```typescript
+function getOccupiedCells(
+  definition: { width: number; height: number },
+  x: number,
+  y: number,
+  rotate: number,
+): Set<string>
+```
+- 计算机器在给定位置和旋转下所占用的所有网格单元
+- 旋转 0° 或 180° 时使用原始 width/height，旋转 90° 或 270° 时交换
+- 返回 `Set<string>`，每个元素格式为 `"col,row"`
+
+### canPlaceMachine
+```typescript
+function canPlaceMachine(
+  type: string,
+  x: number,
+  y: number,
+  rotate: number,
+  existing: PlacedMachine[],
+): boolean
+```
+- 检查机器是否可以放置在指定位置
+- 边界检查: 机器不能超出网格范围
+- 重叠检查: 新机器的任何单元格不能与已有机器的单元格重叠
+- 返回 `true` 表示允许放置，`false` 表示禁止
+
 ## 状态管理
 
 ### dimensions 状态
@@ -216,6 +246,7 @@ interface MachineImageProps {
   rotation: number
   opacity?: number
   cellSize: number
+  invalid?: boolean
 }
 ```
 - 渲染顺序: backgroundImg/方框 → sideImg → gridIcon (gridIcon 不旋转)
@@ -223,10 +254,14 @@ interface MachineImageProps {
 - sideImg 位于机器边缘内侧
 - gridIcon 位于机器中心，**不随机器旋转**
 - sideImg 宽度/高度按机器边长缩放，N/S 方向高度为 `cellSize / 1.5`，E/W 方向宽度为 `cellSize / 1.5`
+- `invalid` 为 true 时，在机器上方显示红色半透明覆盖层 (opacity 0.3)
 
 ### 5. 预览机器渲染
 ```typescript
 const placingDefinition = placingMachine ? machineRegistry.get(placingMachine) : null
+const isPreviewValid = placingMachine && previewPosition
+  ? canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)
+  : true
 const previewMachine = placingDefinition && previewPosition ? (
   <MachineImage
     definition={placingDefinition}
@@ -235,6 +270,7 @@ const previewMachine = placingDefinition && previewPosition ? (
     rotation={placingRotation}
     opacity={0.5}
     cellSize={CELL_SIZE}
+    invalid={!isPreviewValid}
   />
 ) : null
 ```
@@ -242,6 +278,7 @@ const previewMachine = placingDefinition && previewPosition ? (
 - 位置跟随鼠标指针
 - 半透明效果 (opacity: 0.5)
 - 支持旋转预览，围绕中心点旋转
+- 当放置位置与已有机器重叠时，`invalid` 为 true，显示红色覆盖层
 
 ## 交互功能
 
@@ -292,11 +329,19 @@ const handleMouseMove = () => {
 
   if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
     setPreviewPosition({ x, y })
+    const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, factory.machines)
+    stage.container().style.cursor = allowed ? 'default' : 'not-allowed'
+  } else {
+    stage.container().style.cursor = 'not-allowed'
   }
 }
 
 const handleClick = () => {
   if (!placingMachine || !previewPosition) return
+
+  if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)) {
+    return
+  }
 
   setFactory(prev => ({
     ...prev,
@@ -319,6 +364,7 @@ const handleClick = () => {
 - 点击鼠标左键确认放置，写入 factory.machines
 - 按 Escape 键取消放置
 - 按 R 键旋转 90 度
+- **放置限制**: 如果机器与已有机器重叠，不允许放置，鼠标指针变为禁止图标，预览显示红色覆盖层
 
 ### 键盘事件处理
 ```typescript
@@ -327,6 +373,9 @@ useEffect(() => {
     if (e.key === 'Escape') {
       setPlacingMachine(null)
       setPreviewPosition(null)
+      if (stageRef.current) {
+        stageRef.current.container().style.cursor = 'default'
+      }
     }
     if (e.key === 'r' || e.key === 'R') {
       if (placingMachine) {
@@ -338,7 +387,7 @@ useEffect(() => {
   return () => window.removeEventListener('keydown', handleKeyDown)
 }, [placingMachine])
 ```
-- Escape: 取消放置模式
+- Escape: 取消放置模式，重置鼠标指针为默认
 - R: 旋转机器 90 度
 - 依赖数组包含 `placingMachine`，确保获取最新状态
 

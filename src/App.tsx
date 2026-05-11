@@ -12,6 +12,53 @@ const GRID_COLS = 16
 const GRID_ROWS = 16
 const CELL_SIZE = 64
 
+function getOccupiedCells(
+  definition: { width: number; height: number },
+  x: number,
+  y: number,
+  rotate: number,
+): Set<string> {
+  const w = rotate % 180 === 0 ? definition.width : definition.height
+  const h = rotate % 180 === 0 ? definition.height : definition.width
+  const cells = new Set<string>()
+  for (let dx = 0; dx < w; dx++) {
+    for (let dy = 0; dy < h; dy++) {
+      cells.add(`${x + dx},${y + dy}`)
+    }
+  }
+  return cells
+}
+
+function getOccupiedCellsByMachine(pm: PlacedMachine): Set<string> {
+  const def = machineRegistry.get(pm.type)
+  if (!def) return new Set()
+  return getOccupiedCells(def, pm.x, pm.y, pm.rotate)
+}
+
+function canPlaceMachine(
+  type: string,
+  x: number,
+  y: number,
+  rotate: number,
+  existing: PlacedMachine[],
+): boolean {
+  const def = machineRegistry.get(type)
+  if (!def) return false
+
+  const w = rotate % 180 === 0 ? def.width : def.height
+  const h = rotate % 180 === 0 ? def.height : def.width
+  if (x < 0 || y < 0 || x + w > GRID_COLS || y + h > GRID_ROWS) return false
+
+  const newCells = getOccupiedCells(def, x, y, rotate)
+  for (const pm of existing) {
+    const occupied = getOccupiedCellsByMachine(pm)
+    for (const cell of newCells) {
+      if (occupied.has(cell)) return false
+    }
+  }
+  return true
+}
+
 function App() {
   const stageRef = useRef<StageType>(null)
   const [dimensions, setDimensions] = useState({
@@ -39,6 +86,9 @@ function App() {
       if (e.key === 'Escape') {
         setPlacingMachine(null)
         setPreviewPosition(null)
+        if (stageRef.current) {
+          stageRef.current.container().style.cursor = 'default'
+        }
       }
       if (e.key === 'r' || e.key === 'R') {
         if (placingMachine) {
@@ -93,11 +143,19 @@ function App() {
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
+      const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, factory.machines)
+      stage.container().style.cursor = allowed ? 'default' : 'not-allowed'
+    } else {
+      stage.container().style.cursor = 'not-allowed'
     }
   }
 
   const handleClick = () => {
     if (!placingMachine || !previewPosition) return
+
+    if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)) {
+      return
+    }
 
     setFactory(prev => ({
       ...prev,
@@ -114,6 +172,9 @@ function App() {
 
     setPlacingMachine(null)
     setPreviewPosition(null)
+    if (stageRef.current) {
+      stageRef.current.container().style.cursor = 'default'
+    }
   }
 
   const lines = []
@@ -176,6 +237,9 @@ function App() {
   })
 
   const placingDefinition = placingMachine ? machineRegistry.get(placingMachine) : null
+  const isPreviewValid = placingMachine && previewPosition
+    ? canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)
+    : true
   const previewMachine = placingDefinition && previewPosition ? (
     <MachineImage
       definition={placingDefinition}
@@ -184,6 +248,7 @@ function App() {
       rotation={placingRotation}
       opacity={0.5}
       cellSize={CELL_SIZE}
+      invalid={!isPreviewValid}
     />
   ) : null
 

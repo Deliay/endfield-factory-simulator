@@ -9,6 +9,7 @@ interface MachineImageProps {
   rotation: number
   opacity?: number
   cellSize: number
+  invalid?: boolean
 }
 
 interface SideImageProps {
@@ -77,7 +78,7 @@ function SideImageRenderer({ side, sideImg, machineWidth, machineHeight, cellSiz
   )
 }
 
-export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize }: MachineImageProps) {
+export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize, invalid }: MachineImageProps) {
   const backgroundUrl = definition.backgroundImg
   const backgroundImg = useImage(backgroundUrl || null)
   const gridIconUrl = definition.gridIcon
@@ -89,75 +90,88 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
   const centerY = y + height / 2
 
   return (
-    <Group
-      x={centerX}
-      y={centerY}
-      rotation={rotation}
-      opacity={opacity}
-    >
-      {backgroundImg ? (
-        <KonvaImage
-          image={backgroundImg}
-          x={-width / 2}
-          y={-height / 2}
-          width={width}
-          height={height}
-        />
-      ) : (
-        <Rect
-          x={-width / 2 + 8}
-          y={-height / 2 + 8}
-          width={width - 16}
-          height={height - 16}
-          stroke="#000"
-          strokeWidth={2}
-        />
-      )}
-      {definition.northSideImg && (
-        <SideImageRenderer
-          side="north"
-          sideImg={definition.northSideImg}
-          machineWidth={width}
-          machineHeight={height}
-          cellSize={cellSize}
-        />
-      )}
-      {definition.southSideImg && (
-        <SideImageRenderer
-          side="south"
-          sideImg={definition.southSideImg}
-          machineWidth={width}
-          machineHeight={height}
-          cellSize={cellSize}
-        />
-      )}
-      {definition.eastSideImg && (
-        <SideImageRenderer
-          side="east"
-          sideImg={definition.eastSideImg}
-          machineWidth={width}
-          machineHeight={height}
-          cellSize={cellSize}
-        />
-      )}
-      {definition.westSideImg && (
-        <SideImageRenderer
-          side="west"
-          sideImg={definition.westSideImg}
-          machineWidth={width}
-          machineHeight={height}
-          cellSize={cellSize}
-        />
-      )}
+    <>
+      <Group
+        x={centerX}
+        y={centerY}
+        rotation={rotation}
+        opacity={opacity}
+      >
+        {backgroundImg ? (
+          <KonvaImage
+            image={backgroundImg}
+            x={-width / 2}
+            y={-height / 2}
+            width={width}
+            height={height}
+          />
+        ) : (
+          <Rect
+            x={-width / 2 + 8}
+            y={-height / 2 + 8}
+            width={width - 16}
+            height={height - 16}
+            stroke="#000"
+            strokeWidth={2}
+          />
+        )}
+        {definition.northSideImg && (
+          <SideImageRenderer
+            side="north"
+            sideImg={definition.northSideImg}
+            machineWidth={width}
+            machineHeight={height}
+            cellSize={cellSize}
+          />
+        )}
+        {definition.southSideImg && (
+          <SideImageRenderer
+            side="south"
+            sideImg={definition.southSideImg}
+            machineWidth={width}
+            machineHeight={height}
+            cellSize={cellSize}
+          />
+        )}
+        {definition.eastSideImg && (
+          <SideImageRenderer
+            side="east"
+            sideImg={definition.eastSideImg}
+            machineWidth={width}
+            machineHeight={height}
+            cellSize={cellSize}
+          />
+        )}
+        {definition.westSideImg && (
+          <SideImageRenderer
+            side="west"
+            sideImg={definition.westSideImg}
+            machineWidth={width}
+            machineHeight={height}
+            cellSize={cellSize}
+          />
+        )}
+        {invalid && (
+          <Rect
+            x={-width / 2}
+            y={-height / 2}
+            width={width}
+            height={height}
+            fill="red"
+            opacity={0.3}
+          />
+        )}
+      </Group>
       {gridIconImg && (
         <KonvaImage
           image={gridIconImg}
-          x={-cellSize / 2}
-          y={-cellSize / 2}
+          x={centerX - cellSize / 2}
+          y={centerY - cellSize / 2}
           width={cellSize}
           height={cellSize}
+          opacity={opacity}
         />
       )}
-    </Group>
+    </>
   )
 }
