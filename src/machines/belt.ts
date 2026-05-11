@@ -19,25 +19,25 @@ machineRegistry.register({
 })
 
 machineRegistry.register({
-  type: 'belt_corner_ws',
-  name: '传送带(西→南)',
+  type: 'belt_corner_wn',
+  name: '传送带(西→北)',
   width: 1,
   height: 1,
   ports: [
     { port: 'IN', x: 0, y: 0, orientation: 'W' },
-    { port: 'OUT', x: 0, y: 0, orientation: 'S' },
+    { port: 'OUT', x: 0, y: 0, orientation: 'N' },
   ],
   backgroundImg: BELT_CORNER_2_IMG,
   toolIcon: BELT_TOOL_ICON,
 })
 
 machineRegistry.register({
-  type: 'belt_corner_sw',
-  name: '传送带(南→西)',
+  type: 'belt_corner_nw',
+  name: '传送带(北→西)',
   width: 1,
   height: 1,
   ports: [
-    { port: 'IN', x: 0, y: 0, orientation: 'S' },
+    { port: 'IN', x: 0, y: 0, orientation: 'N' },
     { port: 'OUT', x: 0, y: 0, orientation: 'W' },
   ],
   backgroundImg: BELT_CORNER_1_IMG,

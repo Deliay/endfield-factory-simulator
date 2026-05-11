@@ -173,14 +173,14 @@ function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; ro
   const inDir = opposite[curDir]
   const key = `${inDir}→${nextDir}`
   const lookup: Record<string, { type: string; rotate: number }> = {
-    'N→E': { type: 'belt_corner_ws', rotate: 270 },
-    'S→E': { type: 'belt_corner_sw', rotate: 180 },
-    'W→N': { type: 'belt_corner_ws', rotate: 180 },
-    'E→N': { type: 'belt_corner_sw', rotate: 90 },
-    'S→W': { type: 'belt_corner_ws', rotate: 90 },
-    'N→W': { type: 'belt_corner_sw', rotate: 0 },
-    'W→S': { type: 'belt_corner_sw', rotate: 270 },
-    'E→S': { type: 'belt_corner_ws', rotate: 0 },
+    'S→E': { type: 'belt_corner_wn', rotate: 90 },
+    'N→E': { type: 'belt_corner_nw', rotate: 180 },
+    'E→N': { type: 'belt_corner_wn', rotate: 0 },
+    'W→S': { type: 'belt_corner_wn', rotate: 180 },
+    'S→W': { type: 'belt_corner_nw', rotate: 0 },
+    'N→W': { type: 'belt_corner_wn', rotate: 270 },
+    'E→S': { type: 'belt_corner_nw', rotate: 270 },
+    'W→N': { type: 'belt_corner_nw', rotate: 90 },
   }
   return lookup[key] ?? null
 }
@@ -416,7 +416,7 @@ function App() {
     if (!beltStartPos) {
       const existingBelt = factory.machines.find(
         pm => pm.x === previewPosition.x && pm.y === previewPosition.y &&
-          (pm.type === 'belt' || pm.type === 'belt_corner_ws' || pm.type === 'belt_corner_sw'),
+          (pm.type === 'belt' || pm.type === 'belt_corner_wn' || pm.type === 'belt_corner_nw'),
       )
       if (existingBelt) {
         const def = machineRegistry.get(existingBelt.type)
@@ -495,7 +495,7 @@ function App() {
 
       const existingBelt = machines.find(
         pm => pm.x === beltStartPos.x && pm.y === beltStartPos.y &&
-          (pm.type === 'belt' || pm.type === 'belt_corner_ws' || pm.type === 'belt_corner_sw'),
+          (pm.type === 'belt' || pm.type === 'belt_corner_wn' || pm.type === 'belt_corner_nw'),
       )
 
       if (beltStartDir) {
@@ -618,7 +618,7 @@ function App() {
           if (beltStartDir) {
             const existingBelt = factory.machines.find(
               pm => pm.x === beltStartPos.x && pm.y === beltStartPos.y &&
-                (pm.type === 'belt' || pm.type === 'belt_corner_ws' || pm.type === 'belt_corner_sw'),
+                (pm.type === 'belt' || pm.type === 'belt_corner_wn' || pm.type === 'belt_corner_nw'),
             )
             const pathBeltData = computeBeltPathPieces(path, beltStartDir, existingBelt)
 
@@ -695,7 +695,7 @@ function App() {
         <button className="tool-button" onClick={handleCenterView}>
           居中
         </button>
-        {allMachines.filter(m => m.type !== 'belt_corner_ws' && m.type !== 'belt_corner_sw').map(machine => (
+        {allMachines.filter(m => m.type !== 'belt_corner_wn' && m.type !== 'belt_corner_nw').map(machine => (
           <ToolButton
             key={machine.type}
             definition={machine}
