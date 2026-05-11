@@ -27,7 +27,7 @@ machineRegistry.register({
     { port: 'IN', x: 0, y: 0, orientation: 'W' },
     { port: 'OUT', x: 0, y: 0, orientation: 'S' },
   ],
-  backgroundImg: BELT_CORNER_1_IMG,
+  backgroundImg: BELT_CORNER_2_IMG,
   toolIcon: BELT_TOOL_ICON,
 })
 
@@ -40,6 +40,6 @@ machineRegistry.register({
     { port: 'IN', x: 0, y: 0, orientation: 'S' },
     { port: 'OUT', x: 0, y: 0, orientation: 'W' },
   ],
-  backgroundImg: BELT_CORNER_2_IMG,
+  backgroundImg: BELT_CORNER_1_IMG,
   toolIcon: BELT_TOOL_ICON,
 })
