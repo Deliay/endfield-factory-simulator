@@ -95,7 +95,36 @@ machineRegistry.register({
 })
 ```
 - 尺寸: 1×1 网格
-- 端口: 输入端口在 (0,0)，输出端口在 (1,0)
+- 端口: 输入端口在西侧，输出端口在东侧
+
+### 传送带弯角 (belt_corner_ws / belt_corner_sw)
+```typescript
+machineRegistry.register({
+  type: 'belt_corner_ws',
+  name: '传送带(西→南)',
+  width: 1,
+  height: 1,
+  ports: [
+    { port: 'IN', x: 0, y: 0, orientation: 'W' },
+    { port: 'OUT', x: 0, y: 1, orientation: 'S' },
+  ],
+})
+
+machineRegistry.register({
+  type: 'belt_corner_sw',
+  name: '传送带(南→西)',
+  width: 1,
+  height: 1,
+  ports: [
+    { port: 'IN', x: 0, y: 1, orientation: 'S' },
+    { port: 'OUT', x: 0, y: 0, orientation: 'W' },
+  ],
+})
+```
+- 尺寸: 1×1 网格
+- `belt_corner_ws`: 顺时针弯角 (IN→OUT 为 西→南, 东→北, 南→西, 北→东)
+- `belt_corner_sw`: 逆时针弯角 (IN→OUT 为 南→西, 西→北, 北→东, 东→南)
+- 通过旋转实现四种朝向，不作为工具栏选项显示
 
 ### 协议存储箱 (storage_box)
 ```typescript
@@ -152,6 +181,66 @@ function canPlaceMachine(
 - 重叠检查: 新机器的任何单元格不能与已有机器的单元格重叠
 - 返回 `true` 表示允许放置，`false` 表示禁止
 
+## 传送带放置模式
+
+### 状态
+```typescript
+const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
+const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
+const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
+```
+- `beltStartPos`: 起始cell坐标
+- `beltStartDir`: 起始方向 (belt的OUT方向，即路径前进方向)
+- `beltEndPos`: 鼠标当前指向的终点cell (用于路径预览)
+
+### 起点确定 (第一次点击)
+1. 如果点击的cell已有belt/belt_corner → 取其OUT方向作为 `beltStartDir`
+2. 否则搜索四方向(N/S/E/W)相邻机器的OUT port，优先级：南 > 东 > 北 > 西
+3. 如果无相邻OUT port → 禁止放置
+
+### 路径计算 (第二次点击)
+- 起点到终点必须在同一行或同一列，或构成L型 (最多一次弯折)
+- L型路径有两种: 先水平后垂直 / 先垂直后水平，取第一个可行路径
+- 路径上除起点外的所有cell不能有机器
+
+### 放置逻辑
+1. 如果起点已有belt且方向与路径第一段不同 → 删除旧belt，添加belt_corner
+2. 如果起点无belt → 放置一个belt (方向由 `beltStartDir` 决定)
+3. 路径上每个cell: 直线段放belt，弯折处放belt_corner
+4. 放置后，终点变为新起点，`beltStartDir` 为路径最后一段方向
+5. 可继续点击下一个终点，实现连续放置
+
+### findAdjacentOutPort
+```typescript
+function findAdjacentOutPort(
+  targetX: number, targetY: number,
+  existing: PlacedMachine[],
+  priority: Dir[],
+): { dir: Dir } | null
+```
+- 搜索四方向相邻机器的OUT port
+- 按 priority 顺序返回第一个匹配的方向
+
+### findPath
+```typescript
+function findPath(
+  startX: number, startY: number,
+  endX: number, endY: number,
+  existing: PlacedMachine[],
+  excludeStart: boolean,
+): { x: number; y: number }[] | null
+```
+- 计算从起点到终点的L型路径 (最多一次弯折)
+- 返回路径cell数组，或 null (无可行路径)
+- `excludeStart`: 是否排除起点的占用检查
+
+### getCornerTypeAndRotation
+```typescript
+function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null
+```
+- 根据进入方向和离开方向确定corner类型和旋转
+- 顺时针转弯 → `belt_corner_ws`，逆时针转弯 → `belt_corner_sw`
+
 ## 状态管理
 
 ### dimensions 状态
@@ -178,10 +267,16 @@ const [factory, setFactory] = useState<Factory>({
 const [placingMachine, setPlacingMachine] = useState<string | null>(null)
 const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
 const [placingRotation, setPlacingRotation] = useState(0)
+const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
+const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
+const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
 ```
-- `placingMachine`: 当前正在放置的机器类型，null 表示未在放置模式
+- `placingMachine`: 当前正在放置的机器类型，null 表示未在放置模式，`'belt'` 表示传送带放置模式
 - `previewPosition`: 预览位置的网格坐标
 - `placingRotation`: 当前放置机器的旋转角度 (0, 90, 180, 270)
+- `beltStartPos`: 传送带放置的起始cell
+- `beltStartDir`: 传送带起始方向 (OUT方向)
+- `beltEndPos`: 传送带放置的终点cell (鼠标跟踪)
 
 ## 画布渲染逻辑
 
