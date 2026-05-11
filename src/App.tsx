@@ -168,18 +168,21 @@ function getDirectionRotation(dx: number, dy: number): number {
   return 270
 }
 
-function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null {
+function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; rotate: number } | null {
+  const opposite: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
+  const inDir = opposite[curDir]
+  const key = `${inDir}→${nextDir}`
   const lookup: Record<string, { type: string; rotate: number }> = {
-    'W→S': { type: 'belt_corner_ws', rotate: 0 },
-    'N→W': { type: 'belt_corner_ws', rotate: 90 },
-    'E→N': { type: 'belt_corner_ws', rotate: 180 },
-    'S→E': { type: 'belt_corner_ws', rotate: 270 },
-    'S→W': { type: 'belt_corner_sw', rotate: 0 },
-    'W→N': { type: 'belt_corner_sw', rotate: 90 },
-    'N→E': { type: 'belt_corner_sw', rotate: 180 },
-    'E→S': { type: 'belt_corner_sw', rotate: 270 },
+    'N→E': { type: 'belt_corner_ws', rotate: 270 },
+    'S→E': { type: 'belt_corner_sw', rotate: 180 },
+    'W→N': { type: 'belt_corner_ws', rotate: 180 },
+    'E→N': { type: 'belt_corner_sw', rotate: 90 },
+    'S→W': { type: 'belt_corner_ws', rotate: 90 },
+    'N→W': { type: 'belt_corner_sw', rotate: 0 },
+    'W→S': { type: 'belt_corner_sw', rotate: 270 },
+    'E→S': { type: 'belt_corner_ws', rotate: 0 },
   }
-  return lookup[`${inDir}→${outDir}`] ?? null
+  return lookup[key] ?? null
 }
 
 const DIR_DX: Record<Dir, number> = { E: 1, W: -1, N: 0, S: 0 }
