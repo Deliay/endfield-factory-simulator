@@ -162,7 +162,13 @@ const offsetY = (dimensions.height - gridHeight) / 2
 ```
 - 网格在视口中居中显示
 
-### 2. 网格线绘制
+### 2. 网格背景与线条绘制
+
+**网格背景**:
+- 使用 `Rect` 绘制灰色背景
+- 位置: `(offsetX, offsetY)`
+- 尺寸: `gridWidth × gridHeight`
+- 颜色: `#7f7f7f` (灰色)
 
 **垂直线** (65 条):
 - 循环: `i = 0` 到 `GRID_COLS`
@@ -199,7 +205,7 @@ const machines = factory.machines.map((placedMachine, index) => {
 ```
 - 根据机器类型从 Registry 获取定义
 - 使用通用 `MachineImage` 组件渲染
-- 支持旋转，围绕中心点旋转
+- 支持旋转，围绕中心点旋转 (gridIcon 除外)
 
 ### 4. MachineImage 组件
 ```typescript
@@ -212,11 +218,11 @@ interface MachineImageProps {
   cellSize: number
 }
 ```
-- 渲染顺序: backgroundImg/方框 → sideImg → gridIcon
-- 无 backgroundImg 时显示 4px 粗的方框 (宽高各减 16px)
+- 渲染顺序: backgroundImg/方框 → sideImg → gridIcon (gridIcon 不旋转)
+- 无 backgroundImg 时显示 2px 粗的方框 (宽高各减 16px，颜色 `#000`)
 - sideImg 位于机器边缘内侧
-- gridIcon 位于机器中心
-- sideImg 宽度/高度按机器边长缩放
+- gridIcon 位于机器中心，**不随机器旋转**
+- sideImg 宽度/高度按机器边长缩放，N/S 方向高度为 `cellSize / 1.5`，E/W 方向宽度为 `cellSize / 1.5`
 
 ### 5. 预览机器渲染
 ```typescript
@@ -358,6 +364,7 @@ useEffect(() => {
 
 ### 背景色
 - 应用背景: 黑色 (`#000`)
+- 网格背景: 灰色 (`#7f7f7f`)
 - 通过 CSS 变量 `--bg` 控制
 
 ### 画布尺寸
