@@ -185,6 +185,62 @@ function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rota
 const DIR_DX: Record<Dir, number> = { E: 1, W: -1, N: 0, S: 0 }
 const DIR_DY: Record<Dir, number> = { E: 0, W: 0, N: -1, S: 1 }
 
+type BeltPiece = { x: number; y: number; type: string; rotate: number }
+
+function computeBeltPathPieces(
+  path: { x: number; y: number }[],
+  startDir: Dir,
+  existingAtStart: PlacedMachine | undefined,
+): BeltPiece[] {
+  const result: BeltPiece[] = []
+  const allDirs: Dir[] = ['N', 'E', 'S', 'W']
+
+  for (let i = 0; i < path.length; i++) {
+    const cell = path[i]
+    if (i === 0) {
+      const firstDir: Dir = path.length > 1
+        ? (() => {
+            const d = { x: path[1].x - path[0].x, y: path[1].y - path[0].y }
+            return d.x === 1 ? 'E' : d.x === -1 ? 'W' : d.y === 1 ? 'S' : 'N'
+          })()
+        : startDir
+
+      if (existingAtStart && firstDir !== startDir) {
+        const corner = getCornerTypeAndRotation(startDir, firstDir)
+        if (corner) {
+          result.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
+          continue
+        }
+      }
+
+      const rot = ((allDirs.indexOf(startDir) - allDirs.indexOf('E') + 4) % 4) * 90
+      result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
+    } else {
+      const prev = path[i - 1]
+      const d = { x: cell.x - prev.x, y: cell.y - prev.y }
+      const curDir: Dir = d.x === 1 ? 'E' : d.x === -1 ? 'W' : d.y === 1 ? 'S' : 'N'
+
+      if (i < path.length - 1) {
+        const next = path[i + 1]
+        const nextD = { x: next.x - cell.x, y: next.y - cell.y }
+        const nextDir: Dir = nextD.x === 1 ? 'E' : nextD.x === -1 ? 'W' : nextD.y === 1 ? 'S' : 'N'
+
+        if (nextDir !== curDir) {
+          const corner = getCornerTypeAndRotation(curDir, nextDir)
+          if (corner) {
+            result.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
+            continue
+          }
+        }
+      }
+
+      const rot = getDirectionRotation(d.x, d.y)
+      result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
+    }
+  }
+  return result
+}
+
 function App() {
   const stageRef = useRef<StageType>(null)
   const [dimensions, setDimensions] = useState({
@@ -431,10 +487,6 @@ function App() {
     const path = findPath(beltStartPos.x, beltStartPos.y, targetX, targetY, factory.machines, true)
     if (!path) return
 
-    const dx = path[1].x - path[0].x
-    const dy = path[1].y - path[0].y
-    const firstDir: Dir = dx === 1 ? 'E' : dx === -1 ? 'W' : dy === 1 ? 'S' : 'N'
-
     setFactory(prev => {
       let machines = [...prev.machines]
 
@@ -443,46 +495,14 @@ function App() {
           (pm.type === 'belt' || pm.type === 'belt_corner_ws' || pm.type === 'belt_corner_sw'),
       )
 
-      if (existingBelt && beltStartDir && firstDir !== beltStartDir) {
-        const corner = getCornerTypeAndRotation(beltStartDir, firstDir)
-        if (corner) {
+      if (beltStartDir) {
+        const pathBeltData = computeBeltPathPieces(path, beltStartDir, existingBelt)
+        if (existingBelt) {
           machines = machines.filter(pm => pm !== existingBelt)
-          machines.push({ type: corner.type, rotate: corner.rotate, x: beltStartPos.x, y: beltStartPos.y })
         }
-      } else if (!existingBelt && beltStartDir) {
-        const beltDef = machineRegistry.get('belt')
-        if (beltDef) {
-          const allDirs: Dir[] = ['N', 'E', 'S', 'W']
-          const beltBaseOut: Dir = 'E'
-          const baseIdx = allDirs.indexOf(beltBaseOut)
-          const targetIdx = allDirs.indexOf(beltStartDir)
-          const rot = ((targetIdx - baseIdx + 4) % 4) * 90
-          machines.push({ type: 'belt', rotate: rot, x: beltStartPos.x, y: beltStartPos.y })
+        for (const bd of pathBeltData) {
+          machines.push({ type: bd.type, rotate: bd.rotate, x: bd.x, y: bd.y })
         }
-      }
-
-      for (let i = 1; i < path.length; i++) {
-        const prev = path[i - 1]
-        const cur = path[i]
-        const d = { x: cur.x - prev.x, y: cur.y - prev.y }
-        const curDir: Dir = d.x === 1 ? 'E' : d.x === -1 ? 'W' : d.y === 1 ? 'S' : 'N'
-
-        if (i < path.length - 1) {
-          const next = path[i + 1]
-          const nextD = { x: next.x - cur.x, y: next.y - cur.y }
-          const nextDir: Dir = nextD.x === 1 ? 'E' : nextD.x === -1 ? 'W' : nextD.y === 1 ? 'S' : 'N'
-
-          if (nextDir !== curDir) {
-            const corner = getCornerTypeAndRotation(curDir, nextDir)
-            if (corner) {
-              machines.push({ type: corner.type, rotate: corner.rotate, x: cur.x, y: cur.y })
-              continue
-            }
-          }
-        }
-
-        const rot = getDirectionRotation(d.x, d.y)
-        machines.push({ type: 'belt', rotate: rot, x: cur.x, y: cur.y })
       }
 
       return { ...prev, machines }
@@ -592,53 +612,28 @@ function App() {
             )
           }
 
-          const pathBeltData: { x: number; y: number; type: string; rotate: number }[] = []
-          for (let i = 0; i < path.length; i++) {
-            const cell = path[i]
-            if (i === 0) {
-              if (beltStartDir) {
-                const allDirs: Dir[] = ['N', 'E', 'S', 'W']
-                const rot = ((allDirs.indexOf(beltStartDir) - allDirs.indexOf('E') + 4) % 4) * 90
-                pathBeltData.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
-              }
-            } else {
-              const prev = path[i - 1]
-              const d = { x: cell.x - prev.x, y: cell.y - prev.y }
-              const curDir: Dir = d.x === 1 ? 'E' : d.x === -1 ? 'W' : d.y === 1 ? 'S' : 'N'
-
-              if (i < path.length - 1) {
-                const next = path[i + 1]
-                const nextD = { x: next.x - cell.x, y: next.y - cell.y }
-                const nextDir: Dir = nextD.x === 1 ? 'E' : nextD.x === -1 ? 'W' : nextD.y === 1 ? 'S' : 'N'
-
-                if (nextDir !== curDir) {
-                  const corner = getCornerTypeAndRotation(curDir, nextDir)
-                  if (corner) {
-                    pathBeltData.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
-                    continue
-                  }
-                }
-              }
-
-              const rot = getDirectionRotation(d.x, d.y)
-              pathBeltData.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
-            }
-          }
-
-          for (const bd of pathBeltData) {
-            const def = machineRegistry.get(bd.type)
-            if (!def) continue
-            beltPathPreview.push(
-              <MachineImage
-                key={`belt-preview-${bd.x}-${bd.y}`}
-                definition={def}
-                x={offsetX + bd.x * CELL_SIZE}
-                y={offsetY + bd.y * CELL_SIZE}
-                rotation={bd.rotate}
-                opacity={0.5}
-                cellSize={CELL_SIZE}
-              />,
+          if (beltStartDir) {
+            const existingBelt = factory.machines.find(
+              pm => pm.x === beltStartPos.x && pm.y === beltStartPos.y &&
+                (pm.type === 'belt' || pm.type === 'belt_corner_ws' || pm.type === 'belt_corner_sw'),
             )
+            const pathBeltData = computeBeltPathPieces(path, beltStartDir, existingBelt)
+
+            for (const bd of pathBeltData) {
+              const def = machineRegistry.get(bd.type)
+              if (!def) continue
+              beltPathPreview.push(
+                <MachineImage
+                  key={`belt-preview-${bd.x}-${bd.y}`}
+                  definition={def}
+                  x={offsetX + bd.x * CELL_SIZE}
+                  y={offsetY + bd.y * CELL_SIZE}
+                  rotation={bd.rotate}
+                  opacity={0.5}
+                  cellSize={CELL_SIZE}
+                />,
+              )
+            }
           }
         } else {
           beltPathPreview.push(
