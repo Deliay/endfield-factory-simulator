@@ -169,17 +169,17 @@ function getDirectionRotation(dx: number, dy: number): number {
 }
 
 function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null {
-  const cw: Record<string, Dir> = { N: 'E', E: 'S', S: 'W', W: 'N' }
-  if (cw[inDir] === outDir) {
-    const dirRot: Record<Dir, number> = { N: 0, E: 90, S: 180, W: 270 }
-    return { type: 'belt_corner_ws', rotate: dirRot[inDir] }
+  const lookup: Record<string, { type: string; rotate: number }> = {
+    'W→S': { type: 'belt_corner_ws', rotate: 0 },
+    'N→W': { type: 'belt_corner_ws', rotate: 90 },
+    'E→N': { type: 'belt_corner_ws', rotate: 180 },
+    'S→E': { type: 'belt_corner_ws', rotate: 270 },
+    'S→W': { type: 'belt_corner_sw', rotate: 0 },
+    'W→N': { type: 'belt_corner_sw', rotate: 90 },
+    'N→E': { type: 'belt_corner_sw', rotate: 180 },
+    'E→S': { type: 'belt_corner_sw', rotate: 270 },
   }
-  const ccw: Record<string, Dir> = { N: 'W', W: 'S', S: 'E', E: 'N' }
-  if (ccw[inDir] === outDir) {
-    const dirRot: Record<Dir, number> = { S: 0, W: 90, N: 180, E: 270 }
-    return { type: 'belt_corner_sw', rotate: dirRot[inDir] }
-  }
-  return null
+  return lookup[`${inDir}→${outDir}`] ?? null
 }
 
 const DIR_DX: Record<Dir, number> = { E: 1, W: -1, N: 0, S: 0 }
