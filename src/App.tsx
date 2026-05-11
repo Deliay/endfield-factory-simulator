@@ -57,7 +57,11 @@ function App() {
   }
 
   return (
-    <Stage width={dimensions.width} height={dimensions.height}>
+    <Stage
+      width={dimensions.width}
+      height={dimensions.height}
+      draggable
+    >
       <Layer>
         {lines}
       </Layer>
