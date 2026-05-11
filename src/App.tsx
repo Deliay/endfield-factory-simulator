@@ -84,10 +84,10 @@ function findAdjacentOutPort(
       const portWorldX = pm.x + port.x
       const portWorldY = pm.y + port.y
       let dir: Dir | null = null
-      if (port.orientation === 'E' && portWorldX === targetX && portWorldY === targetY) dir = 'W'
-      else if (port.orientation === 'W' && portWorldX === targetX + 1 && portWorldY === targetY) dir = 'E'
-      else if (port.orientation === 'S' && portWorldX === targetX && portWorldY === targetY - 1) dir = 'N'
-      else if (port.orientation === 'N' && portWorldX === targetX && portWorldY === targetY + 1) dir = 'S'
+      if (port.orientation === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
+      else if (port.orientation === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
+      else if (port.orientation === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
+      else if (port.orientation === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
       if (dir) candidates.push({ dir })
     }
   }

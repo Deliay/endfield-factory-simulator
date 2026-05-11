@@ -10,7 +10,7 @@ machineRegistry.register({
   height: 1,
   ports: [
     { port: 'IN', x: 0, y: 0, orientation: 'W' },
-    { port: 'OUT', x: 1, y: 0, orientation: 'E' },
+    { port: 'OUT', x: 0, y: 0, orientation: 'E' },
   ],
   backgroundImg: BELT_BACKGROUND_IMG,
   toolIcon: BELT_TOOL_ICON,
@@ -23,7 +23,7 @@ machineRegistry.register({
   height: 1,
   ports: [
     { port: 'IN', x: 0, y: 0, orientation: 'W' },
-    { port: 'OUT', x: 0, y: 1, orientation: 'S' },
+    { port: 'OUT', x: 0, y: 0, orientation: 'S' },
   ],
   backgroundImg: BELT_BACKGROUND_IMG,
   toolIcon: BELT_TOOL_ICON,
@@ -35,7 +35,7 @@ machineRegistry.register({
   width: 1,
   height: 1,
   ports: [
-    { port: 'IN', x: 0, y: 1, orientation: 'S' },
+    { port: 'IN', x: 0, y: 0, orientation: 'S' },
     { port: 'OUT', x: 0, y: 0, orientation: 'W' },
   ],
   backgroundImg: BELT_BACKGROUND_IMG,
