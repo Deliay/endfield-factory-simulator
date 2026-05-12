@@ -318,6 +318,8 @@ export function computeBeltPathPieces(
   return pieces
 }
 
+// Module-level mutable state for belt placement (avoids React stale closure in event handlers)
+
 function App() {
   const stageRef = useRef<StageType>(null)
   const [dimensions, setDimensions] = useState({
@@ -334,10 +336,12 @@ function App() {
   const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
   const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
   const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
+  // Refs for event handlers — avoids React 18 batching stale closure
   const beltStartPosRef = useRef(beltStartPos)
   const beltStartDirRef = useRef(beltStartDir)
-  useEffect(() => { beltStartPosRef.current = beltStartPos }, [beltStartPos])
-  useEffect(() => { beltStartDirRef.current = beltStartDir }, [beltStartDir])
+  // Helpers that update ref and state synchronously (for use in event handlers only)
+  const sp = (pos: typeof beltStartPos) => { beltStartPosRef.current = pos; setBeltStartPos(pos) }
+  const sd = (dir: typeof beltStartDir) => { beltStartDirRef.current = dir; setBeltStartDir(dir) }
 
   const allMachines = machineRegistry.getAll()
 
@@ -353,8 +357,8 @@ function App() {
       if (e.key === 'Escape') {
         setPlacingMachine(null)
         setPreviewPosition(null)
-        setBeltStartPos(null)
-        setBeltStartDir(null)
+        sp(null)
+        sd(null)
         setBeltEndPos(null)
         if (stageRef.current) {
           stageRef.current.container().style.cursor = 'default'
@@ -445,23 +449,23 @@ function App() {
           const def = machineRegistry.get(existingBelt.type)
           const inPort = def?.ports.find(p => p.port === 'IN')
           const entryDir = inPort ? rotateDir(inPort.direction, existingBelt.rotate) : 'N'
-          setBeltStartPos({ x, y })
-          setBeltStartDir(entryDir)
+          sp({ x, y })
+          sd(entryDir)
         } else {
           const machinePort = findMachineOutPort(x, y, factory.machines)
           if (machinePort) {
-            setBeltStartPos({ x: machinePort.outX, y: machinePort.outY })
-            setBeltStartDir(machinePort.dir)
+            sp({ x: machinePort.outX, y: machinePort.outY })
+            sd(machinePort.dir)
           } else {
             const result = findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
             if (result) {
-              setBeltStartPos({ x, y })
-              setBeltStartDir(result.dir)
+              sp({ x, y })
+              sd(result.dir)
             }
           }
         }
       } else {
-        const path = findPath(beltStartPosRef.current.x, beltStartPosRef.current.y, x, y, factory.machines, true)
+        const path = findPath(beltStartPosRef.current!.x, beltStartPosRef.current!.y, x, y, factory.machines, true)
         if (path) {
           const startPos = path[0]
           setFactory(prev => {
@@ -482,8 +486,8 @@ function App() {
           const lastDir: Dir = prev2.x === last.x
             ? (prev2.y < last.y ? 'S' : 'N')
             : (prev2.x < last.x ? 'E' : 'W')
-          setBeltStartPos({ x, y })
-          setBeltStartDir(OPPOSITE[lastDir])
+          sp({ x, y })
+          sd(OPPOSITE[lastDir])
         }
       }
       return
