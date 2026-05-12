@@ -439,6 +439,7 @@ const offsetY = (dimensions.height - gridHeight) / 2
 ```js
 {
   ticking(),
+  postTicking(),
   msPerRound,
   progress,
   round,
@@ -541,6 +542,27 @@ take() {
 ### 物品展示
 
 物品在传送带传递是会有物品展示效果(!!this.inventory.storage[0])，路径是从 IN port 流向 OUT port，从下一节传送带的IN port出来，又往下一节的 OUT port出去，直到流向机器的IN port，或者物品一直存在，没有inport来主动获取。
+
+### 测试用例
+
+CASE1: 在(1,1)放置storage_box，初始化物品为 { id: 'item_test', amount: 1}
+- storage_box出入口(3,3)连接传送带(3,4)-(4,4)-(4,3)-(4,2),(4,1),(4,0)-(3,0)，此时storage_box的out和in通过传送带相连接
+- [tick:0]factory第一次ticking，在传送带(3,4)ticking时，从storage_box take 1个 item_test，此时storage_box的storage为空，此时in-port取的物品存放在一个输入口缓冲区里
+- [tick:0:post]: 将物品从缓冲区 写入库存
+- [tick:1] 传送带(4,4)从传送带(3,4)的库存取到物品，进入(4,4)的缓冲区
+- [tick:1:post]: 将物品从缓冲区 写入库存 (4, 4).cace -> (4, 4).storage
+- [tick:2] (4, 4).storage -> (4, 3).cache
+- [tick:2:post]: (4, 3).cache -> (4, 3).storage
+- [tick:3] (4, 3).storage -> (4, 2).cache
+- [tick:3:post]: (4, 2).cache -> (4, 2).storage
+- [tick:4] (4, 2).storage -> (4, 1).cache
+- [tick:4:post]: (4, 1).cache -> (4, 1).storage
+- [tick:5] (4, 1).storage -> (4, 0).cache
+- [tick:5:post]: (4, 0).cache -> (4, 0).storage
+- [tick:6] (4, 0).storage -> (3, 0).cache
+- [tick:6:post]: (3, 0).cache -> (3, 0).storage
+- [tick:7]: storage_box的in接口 取到(3,0)传送带的物品，并进入缓冲区
+- [tick:7:post]: 将缓冲区的物品写入storage
 
 ## 文件结构
 

@@ -15,6 +15,7 @@ export interface RuntimeMachine {
   inventory: {
     storage: (ItemStack | null)[]
   }
+  inputBuffer: (ItemStack | null)[]
 }
 
 export class FactoryEmulator {
@@ -28,6 +29,7 @@ export class FactoryEmulator {
     this.machines = placedMachines.map(pm => {
       const def = machineRegistry.get(pm.type)
       if (!def) throw new Error(`Unknown machine type: ${pm.type}`)
+      const inPortCount = def.ports.filter(p => p.port === 'IN').length
       return {
         type: pm.type,
         rotate: pm.rotate,
@@ -39,6 +41,7 @@ export class FactoryEmulator {
         inventory: {
           storage: Array.from({ length: def.inventoryCapacity }, () => null),
         },
+        inputBuffer: Array.from({ length: inPortCount }, () => null),
       }
     })
   }
@@ -63,6 +66,40 @@ export class FactoryEmulator {
         m.round += 1
         this.tickMachine(i)
       }
+    }
+
+    for (let i = 0; i < this.machines.length; i++) {
+      this.postTickMachine(i)
+    }
+  }
+
+  private postTickMachine(machineIdx: number): void {
+    const m = this.machines[machineIdx]
+
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
+      if (m.inputBuffer[0]) {
+        m.inventory.storage[0] = m.inputBuffer[0]
+        m.inputBuffer[0] = null
+      }
+      return
+    }
+
+    if (m.type === 'storage_box') {
+      for (let pi = 0; pi < m.inputBuffer.length; pi++) {
+        const bufItem = m.inputBuffer[pi]
+        if (!bufItem) continue
+        const inboxIdx = m.inventory.storage.findIndex(
+          s => !s || (s.id === bufItem.id && s.amount < 50)
+        )
+        if (inboxIdx === -1) continue
+        if (m.inventory.storage[inboxIdx]) {
+          m.inventory.storage[inboxIdx]!.amount += bufItem.amount
+        } else {
+          m.inventory.storage[inboxIdx] = bufItem
+        }
+        m.inputBuffer[pi] = null
+      }
+      return
     }
   }
 
@@ -185,13 +222,14 @@ export class FactoryEmulator {
 
     if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
       if (m.inventory.storage[0]) return
+      if (m.inputBuffer[0]) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
       const source = this.activeInput(machineIdx, inPort)
       if (!source) return
       const item = this.take(source.machineIndex, source.port, 1)
       if (item) {
-        m.inventory.storage[0] = item
+        m.inputBuffer[0] = item
       }
       return
     }
@@ -199,25 +237,18 @@ export class FactoryEmulator {
     if (m.type === 'storage_box') {
       if (m.inventory.storage.every(s => s !== null && s.amount >= 50)) return
       const inPorts = def.ports.filter(p => p.port === 'IN')
-      for (const inPort of inPorts) {
+      for (let pi = 0; pi < inPorts.length; pi++) {
+        if (m.inputBuffer[pi]) continue
+        const inPort = inPorts[pi]
         const source = this.activeInput(machineIdx, inPort)
         if (!source) continue
         const type = this.peek(source.machineIndex, source.port)
         if (!type) continue
 
-        const inboxIdx = m.inventory.storage.findIndex(
-          s => !s || (s.id === type && s.amount < 50)
-        )
-        if (inboxIdx === -1) continue
-
         const item = this.take(source.machineIndex, source.port, 1)
         if (!item) continue
 
-        if (m.inventory.storage[inboxIdx]) {
-          m.inventory.storage[inboxIdx]!.amount += item.amount
-        } else {
-          m.inventory.storage[inboxIdx] = item
-        }
+        m.inputBuffer[pi] = item
       }
       return
     }
