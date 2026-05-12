@@ -592,6 +592,16 @@ function App() {
       } else {
         const snap = findAdjacentInPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
         dispatch({ type: 'BELT_PLACE', x: snap ? snap.x : x, y: snap ? snap.y : y })
+        if (snap) {
+          dispatch({ type: 'RESET_BELT' })
+          setPlacingMachine(null)
+          setPreviewPosition(null)
+          setBeltEndPos(null)
+          setBeltPreviewPieces(null)
+          if (stageRef.current) {
+            stageRef.current.container().style.cursor = 'default'
+          }
+        }
       }
       return
     }
