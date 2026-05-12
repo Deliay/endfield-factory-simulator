@@ -95,8 +95,8 @@ function findAdjacentOutPort(
         let rotatedRelX = relX
         let rotatedRelY = relY
         for (let i = 0; i < steps; i++) {
-          const newRelX = rotatedRelY
-          const newRelY = -rotatedRelX
+          const newRelX = -rotatedRelY
+          const newRelY = rotatedRelX
           rotatedRelX = newRelX
           rotatedRelY = newRelY
         }
@@ -491,8 +491,8 @@ function App() {
               let rotatedRelX = relX
               let rotatedRelY = relY
               for (let i = 0; i < steps; i++) {
-                const newRelX = rotatedRelY
-                const newRelY = -rotatedRelX
+                const newRelX = -rotatedRelY
+                const newRelY = rotatedRelX
                 rotatedRelX = newRelX
                 rotatedRelY = newRelY
               }

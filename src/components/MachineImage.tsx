@@ -108,8 +108,8 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
     let rotatedRelX = relX
     let rotatedRelY = relY
     for (let i = 0; i < steps; i++) {
-      const newRelX = rotatedRelY
-      const newRelY = -rotatedRelX
+      const newRelX = -rotatedRelY
+      const newRelY = rotatedRelX
       rotatedRelX = newRelX
       rotatedRelY = newRelY
     }
