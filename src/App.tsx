@@ -6,7 +6,9 @@ import { machineRegistry } from './types/Machine'
 import type { Factory, PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
+import { StorageDialog } from './components/StorageDialog'
 import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
+import { FactoryEmulator } from './factory/FactoryEmulator'
 import './machines/belt'
 import './machines/storage_box'
 
@@ -470,6 +472,11 @@ function App() {
   const [placingRotation, setPlacingRotation] = useState(0)
   const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
   const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
+  const [simRunning, setSimRunning] = useState(false)
+  const [simTimeScale, setSimTimeScale] = useState(1)
+  const [beltItems, setBeltItems] = useState<Map<string, string | null>>(new Map())
+  const [storageDialog, setStorageDialog] = useState<{ machineIdx: number; storage: ({ id: string; amount: number } | null)[] } | null>(null)
+  const emulatorRef = useRef<FactoryEmulator | null>(null)
 
   const allMachines = machineRegistry.getAll()
 
@@ -506,6 +513,48 @@ function App() {
     }
   }, [placingMachine, stageRef])
 
+  const simRunningRef = useRef(simRunning)
+  const simTimeScaleRef = useRef(simTimeScale)
+  useEffect(() => {
+    simRunningRef.current = simRunning
+  }, [simRunning])
+  useEffect(() => {
+    simTimeScaleRef.current = simTimeScale
+  }, [simTimeScale])
+
+  useEffect(() => {
+    const emulator = new FactoryEmulator(state.machines)
+    emulatorRef.current = emulator
+    emulator.onTick = (items) => {
+      setBeltItems(new Map(items))
+    }
+    setBeltItems(new Map(emulator.getItemMap())) // eslint-disable-line react-hooks/set-state-in-effect
+    if (simRunningRef.current) {
+      emulator.setTimeScale(simTimeScaleRef.current)
+      emulator.start()
+    }
+    return () => {
+      emulator.stop()
+    }
+  }, [state.machines])
+
+  useEffect(() => {
+    const emulator = emulatorRef.current
+    if (!emulator) return
+    if (simRunning) {
+      emulator.setTimeScale(simTimeScale)
+      emulator.start()
+    } else {
+      emulator.stop()
+    }
+  }, [simRunning, simTimeScale])
+
+  useEffect(() => {
+    return () => {
+      emulatorRef.current?.stop()
+    }
+  }, [])
+
   const gridWidth = GRID_COLS * CELL_SIZE
   const gridHeight = GRID_ROWS * CELL_SIZE
   const offsetX = (dimensions.width - gridWidth) / 2
@@ -516,6 +565,14 @@ function App() {
       stageRef.current.position({ x: 0, y: 0 })
       stageRef.current.batchDraw()
     }
+  }
+
+  const handleSimToggle = () => {
+    setSimRunning(prev => !prev)
+  }
+
+  const handleSimSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSimTimeScale(Number(e.target.value))
   }
 
   const handleSelectMachine = (type: string) => {
@@ -530,7 +587,7 @@ function App() {
   }
 
   const handleMouseMove = () => {
-    if (!placingMachine || !stageRef.current) return
+    if (!stageRef.current) return
 
     const pointer = stageRef.current.getPointerPosition()
     if (!pointer) return
@@ -543,6 +600,7 @@ function App() {
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
+      if (!placingMachine) return
       if (placingMachine === 'belt' && state.beltStartPos) {
         const snap = findAdjacentInPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
         const endX = snap ? snap.x : x
@@ -567,7 +625,34 @@ function App() {
   }
 
   const handleClick = () => {
-    if (!placingMachine || !previewPosition) return
+    if (!placingMachine || !previewPosition) {
+      if (!placingMachine && previewPosition && stageRef.current) {
+        const x = previewPosition.x
+        const y = previewPosition.y
+        const clickedMachine = state.machines.findIndex(
+          m => m.type === 'storage_box' && (() => {
+            const def = machineRegistry.get(m.type)
+            if (!def) return false
+            const w = m.rotate % 180 === 0 ? def.width : def.height
+            const h = m.rotate % 180 === 0 ? def.height : def.width
+            for (let dx = 0; dx < w; dx++) {
+              for (let dy = 0; dy < h; dy++) {
+                if (m.x + dx === x && m.y + dy === y) return true
+              }
+            }
+            return false
+          })()
+        )
+        if (clickedMachine !== -1 && emulatorRef.current) {
+          const m = emulatorRef.current.machines[clickedMachine]
+          setStorageDialog({
+            machineIdx: clickedMachine,
+            storage: m.inventory.storage.map(s => s ? { ...s } : null),
+          })
+        }
+      }
+      return
+    }
 
     if (placingMachine === 'belt') {
       const x = previewPosition.x
@@ -724,6 +809,27 @@ function App() {
     })
   ) : null
 
+  const beltItemElements = state.machines.map((m, idx) => {
+    if (m.type !== 'belt' && !m.type.startsWith('belt_corner')) return null
+    const cellKey = `${m.x},${m.y}`
+    const itemId = beltItems.get(cellKey)
+    if (!itemId) return null
+    return (
+      <Rect
+        key={`belt-item-${idx}`}
+        x={offsetX + m.x * CELL_SIZE + CELL_SIZE / 4}
+        y={offsetY + m.y * CELL_SIZE + CELL_SIZE / 4}
+        width={CELL_SIZE / 2}
+        height={CELL_SIZE / 2}
+        fill="#ffcc00"
+        cornerRadius={4}
+        shadowColor="black"
+        shadowBlur={4}
+        shadowOpacity={0.5}
+      />
+    )
+  })
+
   const beltStartIndicator = placingMachine === 'belt' && state.beltStartPos && !beltEndPos ? (
     <Rect
       x={offsetX + state.beltStartPos.x * CELL_SIZE + 2}
@@ -749,6 +855,7 @@ function App() {
         <Layer>
           {lines}
           {machines}
+          {beltItemElements}
           {previewMachine}
           {beltStartIndicator}
           {beltPreviewMachines}
@@ -767,7 +874,38 @@ function App() {
             onClick={() => handleSelectMachine(machine.type)}
           />
         ))}
+        <div className="sim-controls">
+          <button className="tool-button" onClick={handleSimToggle}>
+            {simRunning ? '⏸ 暂停' : '▶ 运行'}
+          </button>
+          <label className="speed-label">
+            速度: {simTimeScale.toFixed(1)}x
+            <input
+              type="range"
+              min="0.1"
+              max="2"
+              step="0.1"
+              value={simTimeScale}
+              onChange={handleSimSpeedChange}
+              className="speed-slider"
+            />
+          </label>
+        </div>
       </div>
+      {storageDialog && (
+        <StorageDialog
+          machineIdx={storageDialog.machineIdx}
+          initialStorage={storageDialog.storage}
+          emulatorRef={emulatorRef}
+          onClose={() => {
+            if (emulatorRef.current) {
+              setBeltItems(new Map(emulatorRef.current.getItemMap()))
+            }
+            setStorageDialog(null)
+          }}
+        />
+      )}
+
     </>
   )
 }

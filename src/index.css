@@ -163,3 +163,83 @@ code {
   margin-right: 8px;
   vertical-align: middle;
 }
+
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 1px solid #555;
+}
+
+.speed-label {
+  color: #fff;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.speed-slider {
+  width: 80px;
+  accent-color: #0088ff;
+}
+
+.storage-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.storage-dialog {
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  color: #fff;
+}
+
+.storage-dialog h3 {
+  margin: 0 0 16px;
+  color: #fff;
+}
+
+.storage-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.storage-slot {
+  display: flex;
+  gap: 4px;
+}
+
+.storage-slot input {
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.storage-slot input[type="number"] {
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.storage-slot input:focus {
+  outline: none;
+  border-color: #0088ff;
+}

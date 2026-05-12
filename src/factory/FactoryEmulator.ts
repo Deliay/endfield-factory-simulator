@@ -4,8 +4,6 @@ import { rotateDir, rotatePortPosition, type Dir } from '../utils/rotation'
 
 const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
 const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
-const DIR_OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
-
 export interface RuntimeMachine {
   type: string
   rotate: number
@@ -23,6 +21,7 @@ export class FactoryEmulator {
   machines: RuntimeMachine[]
   simulatorTimeScale: number = 1
   running: boolean = false
+  onTick: ((items: Map<string, string | null>) => void) | null = null
   private tickTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(placedMachines: PlacedMachine[]) {
@@ -42,6 +41,15 @@ export class FactoryEmulator {
         },
       }
     })
+  }
+
+  getItemMap(): Map<string, string | null> {
+    const map = new Map<string, string | null>()
+    for (const m of this.machines) {
+      const item = m.inventory.storage.find(s => s !== null)
+      map.set(`${m.x},${m.y}`, item?.id ?? null)
+    }
+    return map
   }
 
   tick(): void {
@@ -64,6 +72,7 @@ export class FactoryEmulator {
     const loop = () => {
       if (!this.running) return
       this.tick()
+      this.onTick?.(this.getItemMap())
       const minMsPerRound = Math.min(...this.machines.map(m => m.msPerRound))
       this.tickTimer = setTimeout(loop, minMsPerRound * this.simulatorTimeScale)
     }
@@ -150,7 +159,7 @@ export class FactoryEmulator {
     return null
   }
 
-  peek(machineIdx: number, _port: Port): string | null {
+  peek(machineIdx: number, _port: Port): string | null { // eslint-disable-line @typescript-eslint/no-unused-vars
     const m = this.machines[machineIdx]
     return m.inventory.storage.find(s => s !== null)?.id ?? null
   }
