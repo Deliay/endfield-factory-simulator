@@ -89,8 +89,10 @@ function findAdjacentOutPort(
       if (pm.rotate % 360 !== 0) {
         const steps = ((pm.rotate % 360) + 360) % 360 / 90
         for (let i = 0; i < steps; i++) {
-          const newX = cy + (localY - cy)
-          const newY = cy - (localX - cx)
+          const relX = localX - cx
+          const relY = localY - cy
+          const newX = cx - relY
+          const newY = cy + relX
           localX = newX
           localY = newY
         }
@@ -475,8 +477,10 @@ function App() {
             if (clickedMachine.rotate % 360 !== 0) {
               const steps = ((clickedMachine.rotate % 360) + 360) % 360 / 90
               for (let i = 0; i < steps; i++) {
-                const newX = cy + (localY - cy)
-                const newY = cy - (localX - cx)
+                const relX = localX - cx
+                const relY = localY - cy
+                const newX = cx - relY
+                const newY = cy + relX
                 localX = newX
                 localY = newY
               }

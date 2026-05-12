@@ -105,8 +105,10 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
     let x = localX
     let y = localY
     for (let i = 0; i < steps; i++) {
-      const newX = cy + (y - cy)
-      const newY = cy - (x - cx)
+      const relX = x - cx
+      const relY = y - cy
+      const newX = cx - relY
+      const newY = cy + relX
       x = newX
       y = newY
     }
