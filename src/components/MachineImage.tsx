@@ -98,42 +98,41 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
     return allDirs[(idx + rot / 90) % 4]
   }
 
-  function rotatePortPosition(localX: number, localY: number, rot: number): { x: number; y: number } {
+  function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
     const cx = (definition.width - 1) / 2
     const cy = (definition.height - 1) / 2
+    
+    const relX = portX - cx
+    const relY = portY - cy
     const steps = ((rot % 360) + 360) % 360 / 90
-    let x = localX
-    let y = localY
+    let rotatedRelX = relX
+    let rotatedRelY = relY
     for (let i = 0; i < steps; i++) {
-      const relX = x - cx
-      const relY = y - cy
-      const newX = cx - relY
-      const newY = cy + relX
-      x = newX
-      y = newY
+      const newRelX = rotatedRelY
+      const newRelY = -rotatedRelX
+      rotatedRelX = newRelX
+      rotatedRelY = newRelY
     }
-    return { x, y }
-  }
-
-  function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
+    const rotatedX = cx + rotatedRelX
+    const rotatedY = cy + rotatedRelY
+    
     const rotatedDir = rotateDir(orientation, rot)
-    const rotatedPos = rotatePortPosition(portX, portY, rot)
 
-    let labelX = rotatedPos.x * cellSize + cellSize / 2 - width / 2
-    let labelY = rotatedPos.y * cellSize + cellSize / 2 - height / 2
+    let labelX = rotatedX * cellSize + cellSize / 2 - width / 2
+    let labelY = rotatedY * cellSize + cellSize / 2 - height / 2
 
     switch (rotatedDir) {
       case 'N':
-        labelY = rotatedPos.y * cellSize + cellSize / 4 - height / 2
+        labelY = rotatedY * cellSize + cellSize / 4 - height / 2
         break
       case 'S':
-        labelY = (rotatedPos.y + 1) * cellSize - cellSize / 4 - height / 2
+        labelY = (rotatedY + 1) * cellSize - cellSize / 4 - height / 2
         break
       case 'E':
-        labelX = (rotatedPos.x + 1) * cellSize - cellSize / 4 - width / 2
+        labelX = (rotatedX + 1) * cellSize - cellSize / 4 - width / 2
         break
       case 'W':
-        labelX = rotatedPos.x * cellSize + cellSize / 4 - width / 2
+        labelX = rotatedX * cellSize + cellSize / 4 - width / 2
         break
     }
 

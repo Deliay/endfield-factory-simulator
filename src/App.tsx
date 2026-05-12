@@ -83,24 +83,32 @@ function findAdjacentOutPort(
     const cy = (def.height - 1) / 2
     for (const port of def.ports) {
       if (port.port !== 'OUT') continue
-      let localX = port.x
-      let localY = port.y
+      
+      let portWorldX: number
+      let portWorldY: number
       let orientation = port.orientation as Dir
+      
       if (pm.rotate % 360 !== 0) {
+        const relX = port.x - cx
+        const relY = port.y - cy
         const steps = ((pm.rotate % 360) + 360) % 360 / 90
+        let rotatedRelX = relX
+        let rotatedRelY = relY
         for (let i = 0; i < steps; i++) {
-          const relX = localX - cx
-          const relY = localY - cy
-          const newX = cx - relY
-          const newY = cy + relX
-          localX = newX
-          localY = newY
+          const newRelX = rotatedRelY
+          const newRelY = -rotatedRelX
+          rotatedRelX = newRelX
+          rotatedRelY = newRelY
         }
+        portWorldX = pm.x + cx + rotatedRelX
+        portWorldY = pm.y + cy + rotatedRelY
         const idx = allDirs.indexOf(orientation)
         orientation = allDirs[(idx + pm.rotate / 90) % 4]
+      } else {
+        portWorldX = pm.x + port.x
+        portWorldY = pm.y + port.y
       }
-      const portWorldX = pm.x + localX
-      const portWorldY = pm.y + localY
+      
       let dir: Dir | null = null
       if (orientation === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
       else if (orientation === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
@@ -471,24 +479,32 @@ function App() {
           const cy = (def.height - 1) / 2
           for (const port of def.ports) {
             if (port.port !== 'OUT') continue
-            let localX = port.x
-            let localY = port.y
+            
+            let portWorldX: number
+            let portWorldY: number
             let dir: Dir = port.orientation as Dir
+            
             if (clickedMachine.rotate % 360 !== 0) {
+              const relX = port.x - cx
+              const relY = port.y - cy
               const steps = ((clickedMachine.rotate % 360) + 360) % 360 / 90
+              let rotatedRelX = relX
+              let rotatedRelY = relY
               for (let i = 0; i < steps; i++) {
-                const relX = localX - cx
-                const relY = localY - cy
-                const newX = cx - relY
-                const newY = cy + relX
-                localX = newX
-                localY = newY
+                const newRelX = rotatedRelY
+                const newRelY = -rotatedRelX
+                rotatedRelX = newRelX
+                rotatedRelY = newRelY
               }
+              portWorldX = clickedMachine.x + cx + rotatedRelX
+              portWorldY = clickedMachine.y + cy + rotatedRelY
               const idx = allDirs.indexOf(dir)
               dir = allDirs[(idx + clickedMachine.rotate / 90) % 4]
+            } else {
+              portWorldX = clickedMachine.x + port.x
+              portWorldY = clickedMachine.y + port.y
             }
-            const portWorldX = clickedMachine.x + localX
-            const portWorldY = clickedMachine.y + localY
+            
             const tx = portWorldX + DIR_DX[dir]
             const ty = portWorldY + DIR_DY[dir]
             if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS && !isCellOccupied(tx, ty, factory.machines)) {
