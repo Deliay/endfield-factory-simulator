@@ -153,20 +153,20 @@ export function findPath(
 
   if (startX === endX) {
     const path: Array<{ x: number; y: number }> = []
-    const minY = Math.min(startY, endY)
-    const maxY = Math.max(startY, endY)
-    for (let y = minY; y <= maxY; y++) {
-      path.push({ x: startX, y })
+    if (startY < endY) {
+      for (let y = startY; y <= endY; y++) path.push({ x: startX, y })
+    } else {
+      for (let y = startY; y >= endY; y--) path.push({ x: startX, y })
     }
     if (tryPath(path)) return path
   }
 
   if (startY === endY) {
     const path: Array<{ x: number; y: number }> = []
-    const minX = Math.min(startX, endX)
-    const maxX = Math.max(startX, endX)
-    for (let x = minX; x <= maxX; x++) {
-      path.push({ x, y: startY })
+    if (startX < endX) {
+      for (let x = startX; x <= endX; x++) path.push({ x, y: startY })
+    } else {
+      for (let x = startX; x >= endX; x--) path.push({ x, y: startY })
     }
     if (tryPath(path)) return path
   }

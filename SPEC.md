@@ -242,6 +242,13 @@ CASE5: 点击(3,4)作为起始点，结束点选为(0,2)，会产生6个点
 - (0,3): belt, 旋转270
 - (0,2): belt, 旋转270
 
+CASE6: 点击(3,4)作为起始点，结束点选为(0,4)，产生4个点
+
+- (3,4): belt_corner_en, 旋转270
+- (2,4): belt, 旋转180
+- (1,4): belt, 旋转180
+- (0,4): belt, 旋转180
+
 ### findAdjacentOutPort
 ```typescript
 function findAdjacentOutPort(

@@ -98,4 +98,24 @@ describe('Belt placement cases from SPEC.md', () => {
       ])
     })
   })
+
+  describe('CASE6: 点击(3,4)作为起始点，结束点选为(0,4)', () => {
+    it('should find path and compute 4 belt pieces (straight line west)', () => {
+      const path = findPath(3, 4, 0, 4, [storageBox], true)
+      expect(path).toEqual([
+        { x: 3, y: 4 },
+        { x: 2, y: 4 },
+        { x: 1, y: 4 },
+        { x: 0, y: 4 }
+      ])
+
+      const pieces = computeBeltPathPieces(path!, 'N', undefined)
+      expect(pieces).toEqual([
+        { x: 3, y: 4, type: BeltCornerEnConfig.type, rotate: 270 },
+        { x: 2, y: 4, type: BeltConfig.type, rotate: 180 },
+        { x: 1, y: 4, type: BeltConfig.type, rotate: 180 },
+        { x: 0, y: 4, type: BeltConfig.type, rotate: 180 }
+      ])
+    })
+  })
 })
