@@ -144,13 +144,13 @@ describe('Belt placement from storage_box to (3,2)', () => {
     const pieces = computeBeltPathPieces(path, 'N', undefined)
     expect(pieces).toHaveLength(3)
 
-    // (2,3): belt_corner_nw with INN and OWW
+    // (2,3): belt_corner_nw with OWN and INE
     expect(pieces[0]).toEqual({ x: 2, y: 3, type: 'belt_corner_nw', rotate: 90 })
     const nwDef = machineRegistry.get('belt_corner_nw')
     expect(nwDef?.ports.find(p => p.port === 'IN')?.direction).toBe('N')
     expect(nwDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('W')
 
-    // (3,3): belt_corner_wn with INE and OWN
+    // (3,3): belt_corner_wn with ONE and IWN
     expect(pieces[1]).toEqual({ x: 3, y: 3, type: 'belt_corner_wn', rotate: 90 })
     const wnDef = machineRegistry.get('belt_corner_wn')
     expect(wnDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
