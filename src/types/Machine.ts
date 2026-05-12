@@ -2,7 +2,7 @@ export interface Port {
   port: 'IN' | 'OUT'
   x: number
   y: number
-  orientation: 'N' | 'S' | 'E' | 'W'
+  direction: 'N' | 'S' | 'E' | 'W'
 }
 
 export interface SideImage {

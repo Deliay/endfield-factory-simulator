@@ -82,23 +82,23 @@ function findAdjacentOutPort(
       
       let portWorldX: number
       let portWorldY: number
-      let orientation = port.orientation as Dir
+      let portDir = port.direction as Dir
       
       if (pm.rotate % 360 !== 0) {
         const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, pm.rotate)
         portWorldX = pm.x + rotatedPos.x
         portWorldY = pm.y + rotatedPos.y
-        orientation = rotateDir(orientation, pm.rotate)
+        portDir = rotateDir(portDir, pm.rotate)
       } else {
         portWorldX = pm.x + port.x
         portWorldY = pm.y + port.y
       }
       
       let dir: Dir | null = null
-      if (orientation === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
-      else if (orientation === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
-      else if (orientation === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
-      else if (orientation === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
+      if (portDir === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
+      else if (portDir === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
+      else if (portDir === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
+      else if (portDir === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
       if (dir) candidates.push({ dir })
     }
   }
@@ -434,11 +434,9 @@ function App() {
         if (def) {
           const outPort = def.ports.find(p => p.port === 'OUT')
           if (outPort) {
-            let outDir: Dir = outPort.orientation as Dir
+            let outDir: Dir = outPort.direction as Dir
             if (existingBelt.rotate % 360 !== 0) {
-              const allDirs: Dir[] = ['N', 'E', 'S', 'W']
-              const idx = allDirs.indexOf(outDir)
-              outDir = allDirs[(idx + existingBelt.rotate / 90) % 4]
+              outDir = rotateDir(outDir, existingBelt.rotate)
             }
             setBeltStartPos(previewPosition)
             setBeltStartDir(outDir)
@@ -464,7 +462,7 @@ function App() {
             
             let portWorldX: number
             let portWorldY: number
-            let dir: Dir = port.orientation as Dir
+            let dir: Dir = port.direction as Dir
             
             if (clickedMachine.rotate % 360 !== 0) {
               const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, clickedMachine.rotate)

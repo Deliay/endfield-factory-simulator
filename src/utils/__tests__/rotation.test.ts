@@ -72,15 +72,15 @@ describe('rotatePortPosition', () => {
     const width = 3
     const height = 3
     const ports = [
-      { x: 0, y: 0, orientation: 'N' as const },
-      { x: 1, y: 0, orientation: 'N' as const },
-      { x: 2, y: 0, orientation: 'N' as const },
+      { x: 0, y: 0, direction: 'N' as const },
+      { x: 1, y: 0, direction: 'N' as const },
+      { x: 2, y: 0, direction: 'N' as const },
     ]
 
     it('should not change ports when rotation is 0', () => {
       const rotated = ports.map(p => ({
         pos: rotatePortPosition(p.x, p.y, width, height, 0),
-        dir: rotateDir(p.orientation, 0)
+        dir: rotateDir(p.direction, 0)
       }))
       expect(rotated).toEqual([
         { pos: { x: 0, y: 0 }, dir: 'N' },
@@ -92,7 +92,7 @@ describe('rotatePortPosition', () => {
     it('should become (2,0)-E, (2,1)-E, (2,2)-E after 90° rotation', () => {
       const rotated = ports.map(p => ({
         pos: rotatePortPosition(p.x, p.y, width, height, 90),
-        dir: rotateDir(p.orientation, 90)
+        dir: rotateDir(p.direction, 90)
       }))
       expect(rotated).toEqual([
         { pos: { x: 2, y: 0 }, dir: 'E' },
@@ -104,7 +104,7 @@ describe('rotatePortPosition', () => {
     it('should become (2,2)-S, (1,2)-S, (0,2)-S after 180° rotation', () => {
       const rotated = ports.map(p => ({
         pos: rotatePortPosition(p.x, p.y, width, height, 180),
-        dir: rotateDir(p.orientation, 180)
+        dir: rotateDir(p.direction, 180)
       }))
       expect(rotated).toEqual([
         { pos: { x: 2, y: 2 }, dir: 'S' },
@@ -116,7 +116,7 @@ describe('rotatePortPosition', () => {
     it('should become (0,2)-W, (0,1)-W, (0,0)-W after 270° rotation', () => {
       const rotated = ports.map(p => ({
         pos: rotatePortPosition(p.x, p.y, width, height, 270),
-        dir: rotateDir(p.orientation, 270)
+        dir: rotateDir(p.direction, 270)
       }))
       expect(rotated).toEqual([
         { pos: { x: 0, y: 2 }, dir: 'W' },

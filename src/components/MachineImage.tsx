@@ -91,9 +91,9 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
   const centerX = x + width / 2
   const centerY = y + height / 2
 
-  function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
+  function getPortPosition(portX: number, portY: number, direction: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
     const rotatedPos = rotatePortPosition(portX, portY, definition.width, definition.height, rot)
-    const rotatedDir = rotateDir(orientation, rot)
+    const rotatedDir = rotateDir(direction, rot)
 
     let labelX = rotatedPos.x * cellSize + cellSize / 2 - width / 2
     let labelY = rotatedPos.y * cellSize + cellSize / 2 - height / 2
@@ -189,7 +189,7 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
           />
         )}
         {showPortLabels && definition.ports.map((port, index) => {
-          const pos = getPortPosition(port.x, port.y, port.orientation, port.port, rotation)
+          const pos = getPortPosition(port.x, port.y, port.direction, port.port, rotation)
           return (
             <Text
               key={`port-label-${index}`}
