@@ -11,8 +11,8 @@ machineRegistry.register({
   width: 1,
   height: 1,
   ports: [
-    { port: 'IN', x: 0, y: 0, direction: 'W' },
-    { port: 'OUT', x: 0, y: 0, direction: 'E' },
+    { port: 'IN', x: 0, y: 0, direction: 'E' },
+    { port: 'OUT', x: 0, y: 0, direction: 'W' },
   ],
   backgroundImg: BELT_BACKGROUND_IMG,
   toolIcon: BELT_TOOL_ICON,

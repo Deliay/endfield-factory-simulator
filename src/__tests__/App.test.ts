@@ -70,12 +70,12 @@ describe('findAdjacentOutPort', () => {
   describe('belt (1x1) with no rotation', () => {
     const machine = createPlacedMachine('belt', 5, 5, 0)
 
-    it('should find OUT port at east side', () => {
-      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
+    it('should find OUT port at west side', () => {
+      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'E' })
     })
 
     it('should not find OUT port at other sides', () => {
-      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
       expect(findAdjacentOutPort(5, 4, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
       expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
     })
@@ -84,12 +84,12 @@ describe('findAdjacentOutPort', () => {
   describe('belt (1x1) rotated 90 degrees', () => {
     const machine = createPlacedMachine('belt', 5, 5, 90)
 
-    it('should find OUT port at south side', () => {
-      expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
+    it('should find OUT port at north side', () => {
+      expect(findAdjacentOutPort(5, 4, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'S' })
     })
 
-    it('should not find OUT port at east side', () => {
-      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    it('should not find OUT port at west side', () => {
+      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
     })
   })
 
@@ -98,8 +98,8 @@ describe('findAdjacentOutPort', () => {
     const belt = createPlacedMachine('belt', 5, 5, 0)
 
     it('should find OUT port from closest machine', () => {
-      const result = findAdjacentOutPort(6, 5, [storageBox, belt], ['S', 'E', 'N', 'W'])
-      expect(result).toEqual({ dir: 'W' })
+      const result = findAdjacentOutPort(4, 5, [storageBox, belt], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ dir: 'E' })
     })
   })
 

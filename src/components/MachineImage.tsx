@@ -112,8 +112,8 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
         break
     }
 
-    const label = portType === 'IN' ? 'IN' : 'OUT'
-    return { x: labelX, y: labelY, text: `${label}-${direction}/${rotatedDir}` }
+    const prefix = portType === 'IN' ? 'I' : 'O'
+    return { x: labelX, y: labelY, text: `${prefix}${direction}${rotatedDir}` }
   }
 
   return (
@@ -199,8 +199,6 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
               fontSize={12}
               fontStyle="bold"
               fill="white"
-              stroke="black"
-              strokeWidth={2}
               align="center"
               verticalAlign="middle"
               width={cellSize}
