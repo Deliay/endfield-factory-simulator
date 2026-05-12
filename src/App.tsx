@@ -6,7 +6,7 @@ import { machineRegistry } from './types/Machine'
 import type { Factory, PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
-import type { Dir } from './utils/rotation'
+import { rotateDir, type Dir } from './utils/rotation'
 import './machines/belt'
 import './machines/storage_box'
 
@@ -68,31 +68,214 @@ class NotImplementedError extends Error {
   }
 }
 
+const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
+const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
+
+function getMachineCells(pm: PlacedMachine): Array<{ x: number; y: number }> {
+  const def = machineRegistry.get(pm.type)
+  if (!def) return []
+  const w = pm.rotate % 180 === 0 ? def.width : def.height
+  const h = pm.rotate % 180 === 0 ? def.height : def.width
+  const cells: Array<{ x: number; y: number }> = []
+  for (let dx = 0; dx < w; dx++) {
+    for (let dy = 0; dy < h; dy++) {
+      cells.push({ x: pm.x + dx, y: pm.y + dy })
+    }
+  }
+  return cells
+}
+
+const DIR_OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
+
 export function findAdjacentOutPort(
-  _targetX: number, _targetY: number,
-  _existing: PlacedMachine[],
-  _priority: Dir[],
+  targetX: number, targetY: number,
+  existing: PlacedMachine[],
+  priority: Dir[],
 ): { dir: Dir } | null {
-  throw new NotImplementedError('findAdjacentOutPort is not implemented')
+  for (const dir of priority) {
+    const adjX = targetX + DIR_DX[dir]
+    const adjY = targetY + DIR_DY[dir]
+
+    for (const pm of existing) {
+      const cells = getMachineCells(pm)
+      for (const cell of cells) {
+        if (cell.x !== adjX || cell.y !== adjY) continue
+
+        const def = machineRegistry.get(pm.type)
+        if (!def) continue
+
+        for (const port of def.ports) {
+          if (port.port !== 'OUT') continue
+          const rotatedDir = rotateDir(port.direction, pm.rotate)
+          const outX = cell.x + DIR_DX[rotatedDir]
+          const outY = cell.y + DIR_DY[rotatedDir]
+          if (outX === targetX && outY === targetY) {
+            return { dir: DIR_OPPOSITE[rotatedDir] }
+          }
+        }
+      }
+    }
+  }
+  return null
+}
+
+function isCellOccupied(x: number, y: number, existing: PlacedMachine[], excludeStartX?: number, excludeStartY?: number): boolean {
+  for (const pm of existing) {
+    if (pm.x === excludeStartX && pm.y === excludeStartY) continue
+    const cells = getMachineCells(pm)
+    for (const cell of cells) {
+      if (cell.x === x && cell.y === y) return true
+    }
+  }
+  return false
 }
 
 export function findPath(
-  _startX: number,
-  _startY: number,
-  _endX: number,
-  _endY: number,
-  _existing: PlacedMachine[],
-  _excludeStart: boolean,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  existing: PlacedMachine[],
+  excludeStart: boolean,
 ): { x: number; y: number }[] | null {
-  throw new NotImplementedError('findPath is not implemented')
+  if (startX === endX && startY === endY) {
+    return [{ x: startX, y: startY }]
+  }
+
+  const tryPath = (path: Array<{ x: number; y: number }>): boolean => {
+    for (let i = excludeStart ? 1 : 0; i < path.length; i++) {
+      if (isCellOccupied(path[i].x, path[i].y, existing)) {
+        return false
+      }
+    }
+    return true
+  }
+
+  if (startX === endX) {
+    const path: Array<{ x: number; y: number }> = []
+    const minY = Math.min(startY, endY)
+    const maxY = Math.max(startY, endY)
+    for (let y = minY; y <= maxY; y++) {
+      path.push({ x: startX, y })
+    }
+    if (tryPath(path)) return path
+  }
+
+  if (startY === endY) {
+    const path: Array<{ x: number; y: number }> = []
+    const minX = Math.min(startX, endX)
+    const maxX = Math.max(startX, endX)
+    for (let x = minX; x <= maxX; x++) {
+      path.push({ x, y: startY })
+    }
+    if (tryPath(path)) return path
+  }
+
+  const corner1 = { x: endX, y: startY }
+  const path1 = [
+    { x: startX, y: startY },
+    ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: startY })),
+    ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: endX, y })),
+  ]
+  if (tryPath(path1)) return path1
+
+  const corner2 = { x: startX, y: endY }
+  const path2 = [
+    { x: startX, y: startY },
+    ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: startX, y })),
+    ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: endY })),
+  ]
+  if (tryPath(path2)) return path2
+
+  return null
+}
+
+function range(start: number, end: number, step: number = 1): number[] {
+  const result: number[] = []
+  if (step > 0) {
+    for (let i = start; i <= end; i++) {
+      result.push(i)
+    }
+  } else {
+    for (let i = start; i >= end; i--) {
+      result.push(i)
+    }
+  }
+  return result
+}
+
+function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null {
+  if (inDir === outDir) return null
+
+  const dirs: Dir[] = ['N', 'E', 'S', 'W']
+  const inIdx = dirs.indexOf(inDir)
+  const outIdx = dirs.indexOf(outDir)
+  const turnCCW = (outIdx - inIdx + 4) % 4
+
+  if (turnCCW === 1) {
+    return { type: 'belt_corner_ne', rotate: 0 }
+  } else if (turnCCW === 2) {
+    return { type: 'belt_corner_ne', rotate: 180 }
+  } else if (turnCCW === 3) {
+    return { type: 'belt_corner_en', rotate: 0 }
+  }
+
+  return null
+}
+
+function getBeltRotation(dir: Dir): number {
+  const dirRotation: Record<Dir, number> = { N: 270, E: 0, S: 90, W: 180 }
+  return dirRotation[dir]
 }
 
 export function computeBeltPathPieces(
-  _path: { x: number; y: number }[],
-  _startDir: Dir,
-  _existingAtStart: PlacedMachine | undefined,
-): never {
-  throw new NotImplementedError('computeBeltPathPieces is not implemented')
+  path: { x: number; y: number }[],
+  startDir: Dir,
+  existingAtStart: PlacedMachine | undefined,
+): Array<{ x: number; y: number; type: string; rotate: number }> {
+  if (path.length === 0) return []
+  if (path.length === 1) {
+    return [{ x: path[0].x, y: path[0].y, type: 'belt', rotate: getBeltRotation(startDir) }]
+  }
+
+  const pieces: Array<{ x: number; y: number; type: string; rotate: number }> = []
+  let currentDir = startDir
+
+  const OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
+
+  for (let i = 0; i < path.length; i++) {
+    const curr = path[i]
+    const isStart = i === 0
+    const isEnd = i === path.length - 1
+
+    if (isStart && existingAtStart) {
+      pieces.push({ x: curr.x, y: curr.y, type: existingAtStart.type, rotate: existingAtStart.rotate })
+      if (path.length > 1) {
+        const next = path[i + 1]
+        currentDir = curr.x === next.x ? (curr.y < next.y ? 'N' : 'S') : (curr.x < next.x ? 'W' : 'E')
+      }
+      continue
+    }
+
+    let exitDir: Dir
+    if (isEnd) {
+      exitDir = currentDir
+    } else {
+      const next = path[i + 1]
+      exitDir = curr.x === next.x ? (curr.y < next.y ? 'S' : 'N') : (curr.x < next.x ? 'E' : 'W')
+    }
+
+    const corner = getCornerTypeAndRotation(currentDir, exitDir)
+    if (corner) {
+      pieces.push({ x: curr.x, y: curr.y, type: corner.type, rotate: corner.rotate })
+    } else {
+      pieces.push({ x: curr.x, y: curr.y, type: 'belt', rotate: getBeltRotation(exitDir) })
+    }
+
+    currentDir = OPPOSITE[exitDir]
+  }
+
+  return pieces
 }
 
 function App() {

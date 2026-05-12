@@ -31,7 +31,7 @@ describe('User specific case: storage box at (2,2) with belts to (3,2)', () => {
 
     expect(pieces).toEqual([
       { x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 },  // (2,3): corner_ne, rotation 0
-      { x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 270 }, // (3,3): corner_ne, rotation 270
+      { x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 180 }, // (3,3): corner_en, rotation 180
       { x: 3, y: 2, type: BeltConfig.type, rotate: 270 }          // (3,2): belt, rotation 270
     ])
   })
@@ -54,21 +54,21 @@ describe('User specific case: storage box at (2,2) with belts to (3,2)', () => {
     ])
   })
 
-  it('verify (3,3) belt is corner_ne rotated 270 with INW and OEN', () => {
+  it('verify (3,3) belt is corner_en rotated 180 with IEW and ONS', () => {
     const path = findPath(2, 3, 3, 2, [storageBox], false)!
     const pieces = computeBeltPathPieces(path, 'N', undefined)
     const piece = pieces[1]
-    
+
     expect(piece.x).toBe(3)
     expect(piece.y).toBe(3)
-    expect(piece.type).toBe(BeltCornerNeConfig.type)
-    expect(piece.rotate).toBe(270)
-    
-    // Original ports: IN direction N, OUT direction E
-    // After rotating 270 degrees:
-    // IN direction N becomes IN direction W (N rotated 270° clockwise → W)
-    // OUT direction E becomes OUT direction N (E rotated 270° clockwise → N)
-    // So ports should be: INW, OEN
+    expect(piece.type).toBe(BeltCornerEnConfig.type)
+    expect(piece.rotate).toBe(180)
+
+    // Original ports: IN direction E, OUT direction N
+    // After rotating 180 degrees:
+    // IN direction E becomes IN direction W (E rotated 180° → W)
+    // OUT direction N becomes OUT direction S (N rotated 180° → S)
+    // So ports should be: IEW, ONS
   })
 
   it('verify (3,2) belt is regular belt rotated 270 with IWS and OEN', () => {
