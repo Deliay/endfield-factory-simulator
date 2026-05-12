@@ -104,8 +104,8 @@ describe('Belt path computation with storage_box', () => {
       // First piece at (2,3): corner_ne, INN,OEE, no rotation (rotate 0)
       expect(pieces[0]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 })
       
-      // Second piece at (3,3): corner_en, IEW,ONS, rotation 180
-      expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 180 })
+      // Second piece at (3,3): corner turning from east to south (belt_corner_ne rotate 90)
+      expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 90 })
       
       // Third piece at (3,4): regular belt, IWN,OES, rotation 90
       expect(pieces[2]).toEqual({ x: 3, y: 4, type: 'belt', rotate: 90 })
@@ -132,6 +132,57 @@ describe('Belt path computation with storage_box', () => {
       const beltDef = machineRegistry.get('belt')
       expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
       expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
+    })
+  })
+
+  describe('Path with two straight belts then corner down', () => {
+    it('should compute correct belt pieces for horizontal path then down', () => {
+      // Path from (0,3) to (2,4) with two straight belts then corner
+      // (0,3) -> (1,3) -> (2,3) -> (2,4)
+      const path = [
+        { x: 0, y: 3 },
+        { x: 1, y: 3 },
+        { x: 2, y: 3 },
+        { x: 2, y: 4 }
+      ]
+      
+      // Start direction is east (going right)
+      const pieces = computeBeltPathPieces(path, 'E', undefined)
+      
+      expect(pieces).toHaveLength(4)
+      
+      // First piece at (0,3): regular belt going east (rotate 0)
+      expect(pieces[0]).toEqual({ x: 0, y: 3, type: 'belt', rotate: 0 })
+      
+      // Second piece at (1,3): regular belt going east (rotate 0)
+      expect(pieces[1]).toEqual({ x: 1, y: 3, type: 'belt', rotate: 0 })
+      
+      // Third piece at (2,3): corner turning from east to south (belt_corner_ne rotate 90)
+      // 根据图像，拐角应该从东转向南，使用 belt_corner_ne 旋转 90 度
+      expect(pieces[2]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 90 })
+      
+      // Fourth piece at (2,4): regular belt going south (rotate 90)
+      expect(pieces[3]).toEqual({ x: 2, y: 4, type: 'belt', rotate: 90 })
+    })
+
+    it('verify port directions for horizontal then down path', () => {
+      // Test the machine definitions
+      // Corner at (2,3): belt_corner_en rotated 270 degrees
+      // Default corner_en: IN East, OUT North
+      // Rotated 270: IN South, OUT East
+      const enDef = machineRegistry.get(BeltCornerEnConfig.type)
+      expect(enDef?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
+      expect(enDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
+      
+      // Straight belts at (0,3) and (1,3): regular belt rotated 0
+      // Default belt: IN West, OUT East
+      const beltDef = machineRegistry.get('belt')
+      expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
+      expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
+      
+      // End belt at (2,4): regular belt rotated 90
+      // Rotated 90: IN North, OUT South
+      // This means IES (IN East South?) - actually IN North, OUT South
     })
   })
 })
