@@ -1,6 +1,7 @@
 import { Image as KonvaImage, Group, Rect, Text } from 'react-konva'
 import type { MachineDefinition, SideImage } from '../types/Machine'
 import { useImage } from '../hooks/useImage'
+import { rotateDir, rotatePortPosition, type Dir } from '../utils/rotation'
 
 interface MachineImageProps {
   definition: MachineDefinition
@@ -90,49 +91,25 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
   const centerX = x + width / 2
   const centerY = y + height / 2
 
-  const allDirs = ['N', 'E', 'S', 'W'] as const
-  type Dir = typeof allDirs[number]
-
-  function rotateDir(dir: Dir, rot: number): Dir {
-    const idx = allDirs.indexOf(dir)
-    return allDirs[(idx + rot / 90) % 4]
-  }
-
   function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
-    const cx = (definition.width - 1) / 2
-    const cy = (definition.height - 1) / 2
-    
-    const relX = portX - cx
-    const relY = portY - cy
-    const steps = ((rot % 360) + 360) % 360 / 90
-    let rotatedRelX = relX
-    let rotatedRelY = relY
-    for (let i = 0; i < steps; i++) {
-      const newRelX = -rotatedRelY
-      const newRelY = rotatedRelX
-      rotatedRelX = newRelX
-      rotatedRelY = newRelY
-    }
-    const rotatedX = cx + rotatedRelX
-    const rotatedY = cy + rotatedRelY
-    
+    const rotatedPos = rotatePortPosition(portX, portY, definition.width, definition.height, rot)
     const rotatedDir = rotateDir(orientation, rot)
 
-    let labelX = rotatedX * cellSize + cellSize / 2 - width / 2
-    let labelY = rotatedY * cellSize + cellSize / 2 - height / 2
+    let labelX = rotatedPos.x * cellSize + cellSize / 2 - width / 2
+    let labelY = rotatedPos.y * cellSize + cellSize / 2 - height / 2
 
     switch (rotatedDir) {
       case 'N':
-        labelY = rotatedY * cellSize + cellSize / 4 - height / 2
+        labelY = rotatedPos.y * cellSize + cellSize / 4 - height / 2
         break
       case 'S':
-        labelY = (rotatedY + 1) * cellSize - cellSize / 4 - height / 2
+        labelY = (rotatedPos.y + 1) * cellSize - cellSize / 4 - height / 2
         break
       case 'E':
-        labelX = (rotatedX + 1) * cellSize - cellSize / 4 - width / 2
+        labelX = (rotatedPos.x + 1) * cellSize - cellSize / 4 - width / 2
         break
       case 'W':
-        labelX = rotatedX * cellSize + cellSize / 4 - width / 2
+        labelX = rotatedPos.x * cellSize + cellSize / 4 - width / 2
         break
     }
 

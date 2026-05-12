@@ -5,6 +5,7 @@ import { machineRegistry } from './types/Machine'
 import type { Factory, PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
+import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
 import './machines/belt'
 import './machines/storage_box'
 
@@ -59,8 +60,6 @@ function canPlaceMachine(
   return true
 }
 
-type Dir = 'N' | 'S' | 'E' | 'W'
-
 function isCellOccupied(x: number, y: number, existing: PlacedMachine[]): boolean {
   for (const pm of existing) {
     const occupied = getOccupiedCellsByMachine(pm)
@@ -74,13 +73,10 @@ function findAdjacentOutPort(
   existing: PlacedMachine[],
   priority: Dir[],
 ): { dir: Dir } | null {
-  const allDirs: Dir[] = ['N', 'E', 'S', 'W']
   const candidates: { dir: Dir }[] = []
   for (const pm of existing) {
     const def = machineRegistry.get(pm.type)
     if (!def) continue
-    const cx = (def.width - 1) / 2
-    const cy = (def.height - 1) / 2
     for (const port of def.ports) {
       if (port.port !== 'OUT') continue
       
@@ -89,21 +85,10 @@ function findAdjacentOutPort(
       let orientation = port.orientation as Dir
       
       if (pm.rotate % 360 !== 0) {
-        const relX = port.x - cx
-        const relY = port.y - cy
-        const steps = ((pm.rotate % 360) + 360) % 360 / 90
-        let rotatedRelX = relX
-        let rotatedRelY = relY
-        for (let i = 0; i < steps; i++) {
-          const newRelX = -rotatedRelY
-          const newRelY = rotatedRelX
-          rotatedRelX = newRelX
-          rotatedRelY = newRelY
-        }
-        portWorldX = pm.x + cx + rotatedRelX
-        portWorldY = pm.y + cy + rotatedRelY
-        const idx = allDirs.indexOf(orientation)
-        orientation = allDirs[(idx + pm.rotate / 90) % 4]
+        const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, pm.rotate)
+        portWorldX = pm.x + rotatedPos.x
+        portWorldY = pm.y + rotatedPos.y
+        orientation = rotateDir(orientation, pm.rotate)
       } else {
         portWorldX = pm.x + port.x
         portWorldY = pm.y + port.y
@@ -473,10 +458,7 @@ function App() {
       if (clickedMachine) {
         const def = machineRegistry.get(clickedMachine.type)
         if (def) {
-          const allDirs: Dir[] = ['N', 'E', 'S', 'W']
           const candidates: { dir: Dir; x: number; y: number; portX: number; portY: number }[] = []
-          const cx = (def.width - 1) / 2
-          const cy = (def.height - 1) / 2
           for (const port of def.ports) {
             if (port.port !== 'OUT') continue
             
@@ -485,21 +467,10 @@ function App() {
             let dir: Dir = port.orientation as Dir
             
             if (clickedMachine.rotate % 360 !== 0) {
-              const relX = port.x - cx
-              const relY = port.y - cy
-              const steps = ((clickedMachine.rotate % 360) + 360) % 360 / 90
-              let rotatedRelX = relX
-              let rotatedRelY = relY
-              for (let i = 0; i < steps; i++) {
-                const newRelX = -rotatedRelY
-                const newRelY = rotatedRelX
-                rotatedRelX = newRelX
-                rotatedRelY = newRelY
-              }
-              portWorldX = clickedMachine.x + cx + rotatedRelX
-              portWorldY = clickedMachine.y + cy + rotatedRelY
-              const idx = allDirs.indexOf(dir)
-              dir = allDirs[(idx + clickedMachine.rotate / 90) % 4]
+              const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, clickedMachine.rotate)
+              portWorldX = clickedMachine.x + rotatedPos.x
+              portWorldY = clickedMachine.y + rotatedPos.y
+              dir = rotateDir(dir, clickedMachine.rotate)
             } else {
               portWorldX = clickedMachine.x + port.x
               portWorldY = clickedMachine.y + port.y
