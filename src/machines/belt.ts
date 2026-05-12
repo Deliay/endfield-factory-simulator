@@ -14,6 +14,8 @@ export const BeltConfig: MachineDefinition = {
     { port: 'IN', x: 0, y: 0, direction: 'W' },
     { port: 'OUT', x: 0, y: 0, direction: 'E' },
   ],
+  inventoryCapacity: 1,
+  msPerRound: 1000,
   backgroundImg: BELT_BACKGROUND_IMG,
   toolIcon: BELT_TOOL_ICON,
 }
@@ -27,6 +29,8 @@ export const BeltCornerNeConfig: MachineDefinition = {
     { port: 'IN', x: 0, y: 0, direction: 'N' },
     { port: 'OUT', x: 0, y: 0, direction: 'E' },
   ],
+  inventoryCapacity: 1,
+  msPerRound: 1000,
   backgroundImg: BELT_CORNER_1_IMG,
   toolIcon: BELT_TOOL_ICON,
 }
@@ -40,6 +44,8 @@ export const BeltCornerEnConfig: MachineDefinition = {
     { port: 'IN', x: 0, y: 0, direction: 'E' },
     { port: 'OUT', x: 0, y: 0, direction: 'N' },
   ],
+  inventoryCapacity: 1,
+  msPerRound: 1000,
   backgroundImg: BELT_CORNER_2_IMG,
   toolIcon: BELT_TOOL_ICON,
 }

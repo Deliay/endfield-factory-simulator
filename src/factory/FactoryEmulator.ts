@@ -1,0 +1,216 @@
+import { machineRegistry, type Port, type ItemStack } from '../types/Machine'
+import type { PlacedMachine } from '../types/Factory'
+import { rotateDir, rotatePortPosition, type Dir } from '../utils/rotation'
+
+const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
+const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
+const DIR_OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
+
+export interface RuntimeMachine {
+  type: string
+  rotate: number
+  x: number
+  y: number
+  msPerRound: number
+  progress: number
+  round: number
+  inventory: {
+    storage: (ItemStack | null)[]
+  }
+}
+
+export class FactoryEmulator {
+  machines: RuntimeMachine[]
+  simulatorTimeScale: number = 1
+  running: boolean = false
+  private tickTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(placedMachines: PlacedMachine[]) {
+    this.machines = placedMachines.map(pm => {
+      const def = machineRegistry.get(pm.type)
+      if (!def) throw new Error(`Unknown machine type: ${pm.type}`)
+      return {
+        type: pm.type,
+        rotate: pm.rotate,
+        x: pm.x,
+        y: pm.y,
+        msPerRound: def.msPerRound,
+        progress: 0,
+        round: 0,
+        inventory: {
+          storage: Array.from({ length: def.inventoryCapacity }, () => null),
+        },
+      }
+    })
+  }
+
+  tick(): void {
+    const minMsPerRound = Math.min(...this.machines.map(m => m.msPerRound))
+    if (!isFinite(minMsPerRound) || this.machines.length === 0) return
+
+    for (let i = 0; i < this.machines.length; i++) {
+      const m = this.machines[i]
+      m.progress += minMsPerRound
+      if (m.progress >= m.round * m.msPerRound) {
+        m.round += 1
+        this.tickMachine(i)
+      }
+    }
+  }
+
+  start(): void {
+    if (this.running) return
+    this.running = true
+    const loop = () => {
+      if (!this.running) return
+      this.tick()
+      const minMsPerRound = Math.min(...this.machines.map(m => m.msPerRound))
+      this.tickTimer = setTimeout(loop, minMsPerRound * this.simulatorTimeScale)
+    }
+    this.tickTimer = setTimeout(loop, 0)
+  }
+
+  stop(): void {
+    this.running = false
+    if (this.tickTimer !== null) {
+      clearTimeout(this.tickTimer)
+      this.tickTimer = null
+    }
+  }
+
+  setTimeScale(scale: number): void {
+    this.simulatorTimeScale = Math.max(0.1, Math.min(scale, 2))
+  }
+
+  private getMachineCells(m: RuntimeMachine): { x: number; y: number }[] {
+    const def = machineRegistry.get(m.type)
+    if (!def) return []
+    const w = m.rotate % 180 === 0 ? def.width : def.height
+    const h = m.rotate % 180 === 0 ? def.height : def.width
+    const cells: { x: number; y: number }[] = []
+    for (let dx = 0; dx < w; dx++) {
+      for (let dy = 0; dy < h; dy++) {
+        cells.push({ x: m.x + dx, y: m.y + dy })
+      }
+    }
+    return cells
+  }
+
+  private isCellOccupiedBy(x: number, y: number, excludeIdx: number): number | null {
+    for (let i = 0; i < this.machines.length; i++) {
+      if (i === excludeIdx) continue
+      const m = this.machines[i]
+      const def = machineRegistry.get(m.type)
+      if (!def) continue
+      const w = m.rotate % 180 === 0 ? def.width : def.height
+      const h = m.rotate % 180 === 0 ? def.height : def.width
+      for (let dx = 0; dx < w; dx++) {
+        for (let dy = 0; dy < h; dy++) {
+          if (m.x + dx === x && m.y + dy === y) return i
+        }
+      }
+    }
+    return null
+  }
+
+  activeInput(
+    machineIdx: number,
+    port: Port,
+  ): { machineIndex: number; port: Port } | null {
+    const m = this.machines[machineIdx]
+    const def = machineRegistry.get(m.type)
+    if (!def) return null
+
+    const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, m.rotate)
+    const portGlobalX = m.x + rotatedPos.x
+    const portGlobalY = m.y + rotatedPos.y
+    const rotatedDir = rotateDir(port.direction, m.rotate)
+    const feedingX = portGlobalX + DIR_DX[rotatedDir]
+    const feedingY = portGlobalY + DIR_DY[rotatedDir]
+
+    const feederIdx = this.isCellOccupiedBy(feedingX, feedingY, machineIdx)
+    if (feederIdx === null) return null
+
+    const feeder = this.machines[feederIdx]
+    const feederDef = machineRegistry.get(feeder.type)
+    if (!feederDef) return null
+
+    for (const fp of feederDef.ports) {
+      if (fp.port !== 'OUT') continue
+      const fRotatedPos = rotatePortPosition(fp.x, fp.y, feederDef.width, feederDef.height, feeder.rotate)
+      const fGlobalX = feeder.x + fRotatedPos.x
+      const fGlobalY = feeder.y + fRotatedPos.y
+      const fRotatedDir = rotateDir(fp.direction, feeder.rotate)
+      const fFeedingX = fGlobalX + DIR_DX[fRotatedDir]
+      const fFeedingY = fGlobalY + DIR_DY[fRotatedDir]
+      if (fFeedingX === portGlobalX && fFeedingY === portGlobalY) {
+        return { machineIndex: feederIdx, port: { ...fp, direction: fRotatedDir } }
+      }
+    }
+    return null
+  }
+
+  peek(machineIdx: number, _port: Port): string | null {
+    const m = this.machines[machineIdx]
+    return m.inventory.storage.find(s => s !== null)?.id ?? null
+  }
+
+  take(machineIdx: number, _port: Port, amount: number): ItemStack | null {
+    const m = this.machines[machineIdx]
+    const idx = m.inventory.storage.findIndex(s => s !== null)
+    if (idx === -1) return null
+    const item = m.inventory.storage[idx]
+    if (!item) return null
+    const taken: ItemStack = { id: item.id, amount: Math.min(amount, item.amount) }
+    item.amount -= taken.amount
+    if (item.amount <= 0) {
+      m.inventory.storage[idx] = null
+    }
+    return taken
+  }
+
+  tickMachine(machineIdx: number): void {
+    const m = this.machines[machineIdx]
+    const def = machineRegistry.get(m.type)
+    if (!def) return
+
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
+      if (m.inventory.storage[0]) return
+      const inPort = def.ports.find(p => p.port === 'IN')
+      if (!inPort) return
+      const source = this.activeInput(machineIdx, inPort)
+      if (!source) return
+      const item = this.take(source.machineIndex, source.port, 1)
+      if (item) {
+        m.inventory.storage[0] = item
+      }
+      return
+    }
+
+    if (m.type === 'storage_box') {
+      if (m.inventory.storage.every(s => s !== null && s.amount >= 50)) return
+      const inPorts = def.ports.filter(p => p.port === 'IN')
+      for (const inPort of inPorts) {
+        const source = this.activeInput(machineIdx, inPort)
+        if (!source) continue
+        const type = this.peek(source.machineIndex, source.port)
+        if (!type) continue
+
+        const inboxIdx = m.inventory.storage.findIndex(
+          s => !s || (s.id === type && s.amount < 50)
+        )
+        if (inboxIdx === -1) continue
+
+        const item = this.take(source.machineIndex, source.port, 1)
+        if (!item) continue
+
+        if (m.inventory.storage[inboxIdx]) {
+          m.inventory.storage[inboxIdx]!.amount += item.amount
+        } else {
+          m.inventory.storage[inboxIdx] = item
+        }
+      }
+      return
+    }
+  }
+}

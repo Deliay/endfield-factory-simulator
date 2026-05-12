@@ -10,12 +10,19 @@ export interface SideImage {
   rotate?: number
 }
 
+export interface ItemStack {
+  id: string
+  amount: number
+}
+
 export interface MachineDefinition {
   type: string
   name: string
   width: number
   height: number
   ports: Port[]
+  inventoryCapacity: number
+  msPerRound: number
   backgroundImg?: string
   toolIcon?: string
   gridIcon?: string
