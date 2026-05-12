@@ -110,7 +110,7 @@ export function findAdjacentOutPort(
   return candidates[0]
 }
 
-function findPath(
+export function findPath(
   startX: number,
   startY: number,
   endX: number,
@@ -201,7 +201,7 @@ const DIR_DY: Record<Dir, number> = { E: 0, W: 0, N: -1, S: 1 }
 
 type BeltPiece = { x: number; y: number; type: string; rotate: number }
 
-function computeBeltPathPieces(
+export function computeBeltPathPieces(
   path: { x: number; y: number }[],
   startDir: Dir,
   existingAtStart: PlacedMachine | undefined,
