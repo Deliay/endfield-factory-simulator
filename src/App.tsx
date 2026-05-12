@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, react-refresh/only-export-components */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useReducer, useRef } from 'react'
 import { Stage, Layer, Line, Rect } from 'react-konva'
 import type { Stage as StageType } from 'konva/lib/Stage'
 import { machineRegistry } from './types/Machine'
@@ -318,30 +318,68 @@ export function computeBeltPathPieces(
   return pieces
 }
 
-// Module-level mutable state for belt placement (avoids React stale closure in event handlers)
+const OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
+
+interface AppState {
+  machines: PlacedMachine[]
+  beltStartPos: { x: number; y: number } | null
+  beltStartDir: Dir | null
+}
+
+type AppAction =
+  | { type: 'BELT_SET_START'; pos: { x: number; y: number }; dir: Dir }
+  | { type: 'BELT_PLACE'; x: number; y: number }
+  | { type: 'PLACE_MACHINE'; machineType: string; rotate: number; x: number; y: number }
+  | { type: 'RESET_BELT' }
+
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'BELT_SET_START':
+      return { ...state, beltStartPos: action.pos, beltStartDir: action.dir }
+    case 'BELT_PLACE': {
+      const s = state.beltStartPos
+      const d = state.beltStartDir
+      if (!s || !d) return state
+      const path = findPath(s.x, s.y, action.x, action.y, state.machines, true)
+      if (!path) return state
+      const startPos = path[0]
+      const existingAtStart = state.machines.find(m => m.x === startPos.x && m.y === startPos.y)
+      const pieces = computeBeltPathPieces(path, d, existingAtStart)
+      const machines = [
+        ...state.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
+        ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
+      ]
+      const last = path[path.length - 1]
+      const prev2 = path[path.length - 2]
+      const lastDir: Dir = prev2.x === last.x ? (prev2.y < last.y ? 'S' : 'N') : (prev2.x < last.x ? 'E' : 'W')
+      return {
+        machines,
+        beltStartPos: { x: action.x, y: action.y },
+        beltStartDir: OPPOSITE[lastDir],
+      }
+    }
+    case 'PLACE_MACHINE':
+      return {
+        ...state,
+        machines: [...state.machines, { type: action.machineType, rotate: action.rotate, x: action.x, y: action.y }],
+      }
+    case 'RESET_BELT':
+      return { ...state, beltStartPos: null, beltStartDir: null }
+  }
+}
 
 function App() {
-  const stageRef = useRef<StageType>(null)
+  const stageRef = useRef<StageType | null>(null)
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
   })
-  const [factory, setFactory] = useState<Factory>({
-    machines: [],
-  })
+  const [state, dispatch] = useReducer(appReducer, { machines: [], beltStartPos: null, beltStartDir: null })
   const [placingMachine, setPlacingMachine] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
   const [placingRotation, setPlacingRotation] = useState(0)
-  const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
-  const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
   const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
   const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
-  // Refs for event handlers — avoids React 18 batching stale closure
-  const beltStartPosRef = useRef(beltStartPos)
-  const beltStartDirRef = useRef(beltStartDir)
-  // Helpers that update ref and state synchronously (for use in event handlers only)
-  const sp = (pos: typeof beltStartPos) => { beltStartPosRef.current = pos; setBeltStartPos(pos) }
-  const sd = (dir: typeof beltStartDir) => { beltStartDirRef.current = dir; setBeltStartDir(dir) }
 
   const allMachines = machineRegistry.getAll()
 
@@ -357,8 +395,7 @@ function App() {
       if (e.key === 'Escape') {
         setPlacingMachine(null)
         setPreviewPosition(null)
-        sp(null)
-        sd(null)
+        dispatch({ type: 'RESET_BELT' })
         setBeltEndPos(null)
         if (stageRef.current) {
           stageRef.current.container().style.cursor = 'default'
@@ -366,9 +403,7 @@ function App() {
       }
       if (e.key === 'r' || e.key === 'R') {
         if (placingMachine) {
-          setPlacingRotation(prev => {
-            return (prev + 90) % 360
-          })
+          setPlacingRotation(prev => (prev + 90) % 360)
         }
       }
     }
@@ -379,7 +414,7 @@ function App() {
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [placingMachine])
+  }, [placingMachine, stageRef])
 
   const gridWidth = GRID_COLS * CELL_SIZE
   const gridHeight = GRID_ROWS * CELL_SIZE
@@ -397,6 +432,8 @@ function App() {
     setPlacingMachine(type)
     setPreviewPosition(null)
     setPlacingRotation(0)
+    dispatch({ type: 'RESET_BELT' })
+    setBeltEndPos(null)
     if (stageRef.current) {
       stageRef.current.container().focus()
     }
@@ -405,32 +442,31 @@ function App() {
   const handleMouseMove = () => {
     if (!placingMachine || !stageRef.current) return
 
-    const stage = stageRef.current
-    const pointer = stage.getPointerPosition()
+    const pointer = stageRef.current.getPointerPosition()
     if (!pointer) return
 
-    const stagePos = stage.position()
-    const stageScale = stage.scaleX()
+    const stagePos = stageRef.current.position()
+    const stageScale = stageRef.current.scaleX()
 
     const x = Math.floor((pointer.x - stagePos.x - offsetX) / (CELL_SIZE * stageScale))
     const y = Math.floor((pointer.y - stagePos.y - offsetY) / (CELL_SIZE * stageScale))
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
-      if (placingMachine === 'belt' && beltStartPosRef.current) {
+      if (placingMachine === 'belt' && state.beltStartPos) {
         setBeltEndPos({ x, y })
-        const path = findPath(beltStartPosRef.current.x, beltStartPosRef.current.y, x, y, factory.machines, true)
+        const path = findPath(state.beltStartPos.x, state.beltStartPos.y, x, y, state.machines, true)
         if (path) {
-          const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, undefined)
+          const pieces = computeBeltPathPieces(path, state.beltStartDir!, undefined)
           setBeltPreviewPieces(pieces)
         } else {
           setBeltPreviewPieces(null)
         }
       }
-      const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, factory.machines)
-      stage.container().style.cursor = allowed ? 'default' : 'not-allowed'
+      const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, state.machines)
+      stageRef.current.container().style.cursor = allowed ? 'default' : 'not-allowed'
     } else {
-      stage.container().style.cursor = 'not-allowed'
+      stageRef.current.container().style.cursor = 'not-allowed'
     }
   }
 
@@ -441,74 +477,37 @@ function App() {
       const x = previewPosition.x
       const y = previewPosition.y
 
-      if (!beltStartPosRef.current) {
-        const existingBelt = factory.machines.find(
+      if (!state.beltStartPos) {
+        const existingBelt = state.machines.find(
           m => m.x === x && m.y === y && (m.type === 'belt' || m.type.startsWith('belt_corner'))
         )
         if (existingBelt) {
           const def = machineRegistry.get(existingBelt.type)
           const inPort = def?.ports.find(p => p.port === 'IN')
           const entryDir = inPort ? rotateDir(inPort.direction, existingBelt.rotate) : 'N'
-          sp({ x, y })
-          sd(entryDir)
+          dispatch({ type: 'BELT_SET_START', pos: { x, y }, dir: entryDir })
         } else {
-          const machinePort = findMachineOutPort(x, y, factory.machines)
+          const machinePort = findMachineOutPort(x, y, state.machines)
           if (machinePort) {
-            sp({ x: machinePort.outX, y: machinePort.outY })
-            sd(machinePort.dir)
+            dispatch({ type: 'BELT_SET_START', pos: { x: machinePort.outX, y: machinePort.outY }, dir: machinePort.dir })
           } else {
-            const result = findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
+            const result = findAdjacentOutPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
             if (result) {
-              sp({ x, y })
-              sd(result.dir)
+              dispatch({ type: 'BELT_SET_START', pos: { x, y }, dir: result.dir })
             }
           }
         }
       } else {
-        const path = findPath(beltStartPosRef.current!.x, beltStartPosRef.current!.y, x, y, factory.machines, true)
-        if (path) {
-          const startPos = path[0]
-          setFactory(prev => {
-            const existingAtStart = prev.machines.find(
-              m => m.x === startPos.x && m.y === startPos.y
-            )
-            const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, existingAtStart)
-            return {
-              ...prev,
-              machines: [
-                ...prev.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
-                ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
-              ],
-            }
-          })
-          const last = path[path.length - 1]
-          const prev2 = path[path.length - 2]
-          const lastDir: Dir = prev2.x === last.x
-            ? (prev2.y < last.y ? 'S' : 'N')
-            : (prev2.x < last.x ? 'E' : 'W')
-          sp({ x, y })
-          sd(OPPOSITE[lastDir])
-        }
+        dispatch({ type: 'BELT_PLACE', x, y })
       }
       return
     }
 
-    if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)) {
+    if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, state.machines)) {
       return
     }
 
-    setFactory(prev => ({
-      ...prev,
-      machines: [
-        ...prev.machines,
-        {
-          type: placingMachine,
-          rotate: placingRotation,
-          x: previewPosition.x,
-          y: previewPosition.y,
-        },
-      ],
-    }))
+    dispatch({ type: 'PLACE_MACHINE', machineType: placingMachine, rotate: placingRotation, x: previewPosition.x, y: previewPosition.y })
 
     setPlacingMachine(null)
     setPreviewPosition(null)
@@ -557,7 +556,7 @@ function App() {
     )
   }
 
-  const machines = factory.machines.map((placedMachine, index) => {
+  const machines = state.machines.map((placedMachine, index) => {
     const definition = machineRegistry.get(placedMachine.type)
     if (!definition) return null
 
@@ -581,7 +580,7 @@ function App() {
     ? machineRegistry.get(placingMachine)
     : null
   const isPreviewValid = placingMachine && placingMachine !== 'belt' && previewPosition
-    ? canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)
+    ? canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, state.machines)
     : true
   const previewMachine = placingDefinition && previewPosition && placingMachine !== 'belt' ? (
     <MachineImage
@@ -596,7 +595,7 @@ function App() {
     />
   ) : null
 
-  const beltPreviewMachines = placingMachine === 'belt' && beltStartPos && beltPreviewPieces ? (
+  const beltPreviewMachines = placingMachine === 'belt' && state.beltStartPos && beltPreviewPieces ? (
     beltPreviewPieces.map((piece, idx) => {
       const def = machineRegistry.get(piece.type)
       if (!def) return null
@@ -614,10 +613,10 @@ function App() {
     })
   ) : null
 
-  const beltStartIndicator = placingMachine === 'belt' && beltStartPos && !beltEndPos ? (
+  const beltStartIndicator = placingMachine === 'belt' && state.beltStartPos && !beltEndPos ? (
     <Rect
-      x={offsetX + beltStartPos.x * CELL_SIZE + 2}
-      y={offsetY + beltStartPos.y * CELL_SIZE + 2}
+      x={offsetX + state.beltStartPos.x * CELL_SIZE + 2}
+      y={offsetY + state.beltStartPos.y * CELL_SIZE + 2}
       width={CELL_SIZE - 4}
       height={CELL_SIZE - 4}
       fill="rgba(0, 150, 255, 0.3)"
