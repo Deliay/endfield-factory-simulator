@@ -118,4 +118,40 @@ describe('Belt placement cases from SPEC.md', () => {
       ])
     })
   })
+
+  describe('CASE7: 点击(3,4)作为起始点，2个结束点(4,4)和(4,3)', () => {
+    const beltAt44: PlacedMachine = { type: 'belt', x: 4, y: 4, rotate: 0 }
+
+    describe('CASE7.1 到达结束点(4,4)', () => {
+      it('should place belt_corner_ne@0 and belt@0', () => {
+        const path = findPath(3, 4, 4, 4, [storageBox], true)
+        expect(path).toEqual([
+          { x: 3, y: 4 },
+          { x: 4, y: 4 }
+        ])
+
+        const pieces = computeBeltPathPieces(path!, 'N', undefined)
+        expect(pieces).toEqual([
+          { x: 3, y: 4, type: BeltCornerNeConfig.type, rotate: 0 },
+          { x: 4, y: 4, type: BeltConfig.type, rotate: 0 }
+        ])
+      })
+    })
+
+    describe('CASE7.2 到达结束点(4,3)，起始点为上一个结束点(4,4)', () => {
+      it('should replace belt@0 with belt_corner_ne@270 and add belt@270', () => {
+        const path = findPath(4, 4, 4, 3, [storageBox], true)
+        expect(path).toEqual([
+          { x: 4, y: 4 },
+          { x: 4, y: 3 }
+        ])
+
+        const pieces = computeBeltPathPieces(path!, 'W', beltAt44)
+        expect(pieces).toEqual([
+          { x: 4, y: 4, type: BeltCornerNeConfig.type, rotate: 270 },
+          { x: 4, y: 3, type: BeltConfig.type, rotate: 270 }
+        ])
+      })
+    })
+  })
 })
