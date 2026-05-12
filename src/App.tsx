@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { Stage, Layer, Line, Rect } from 'react-konva'
 import type { Stage as StageType } from 'konva/lib/Stage'
 import { machineRegistry } from './types/Machine'
-import type { Factory } from './types/Factory'
+import type { Factory, PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
 import './machines/belt'
@@ -448,7 +448,7 @@ function App() {
         const def = machineRegistry.get(clickedMachine.type)
         if (def) {
           const allDirs: Dir[] = ['N', 'E', 'S', 'W']
-          const candidates: { dir: Dir; x: number; y: number }[] = []
+          const candidates: { dir: Dir; x: number; y: number; portX: number; portY: number }[] = []
           for (const port of def.ports) {
             if (port.port !== 'OUT') continue
             const portWorldX = clickedMachine.x + port.x
@@ -461,11 +461,19 @@ function App() {
             const tx = portWorldX + DIR_DX[dir]
             const ty = portWorldY + DIR_DY[dir]
             if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS && !isCellOccupied(tx, ty, factory.machines)) {
-              candidates.push({ dir, x: tx, y: ty })
+              candidates.push({ dir, x: tx, y: ty, portX: portWorldX, portY: portWorldY })
             }
           }
           const priority: Dir[] = ['S', 'E', 'N', 'W']
-          const best = priority.map(d => candidates.find(c => c.dir === d)).find(Boolean)
+          const best = priority
+            .map(d => candidates.filter(c => c.dir === d))
+            .filter(c => c.length > 0)
+            .map(c => c.reduce((closest, curr) => {
+              const currDist = Math.abs(curr.portX - previewPosition.x) + Math.abs(curr.portY - previewPosition.y)
+              const closestDist = Math.abs(closest.portX - previewPosition.x) + Math.abs(closest.portY - previewPosition.y)
+              return currDist < closestDist ? curr : closest
+            }))
+            .find(Boolean)
           if (best) {
             setBeltStartPos({ x: best.x, y: best.y })
             setBeltStartDir(best.dir)
@@ -577,11 +585,12 @@ function App() {
         y={y}
         rotation={placedMachine.rotate}
         cellSize={CELL_SIZE}
+        showPortLabels={true}
       />
     )
   })
 
-  const beltPathPreview = [] as JSX.Element[]
+  const beltPathPreview: ReactNode[] = []
   if (placingMachine === 'belt') {
     if (beltStartPos) {
       beltPathPreview.push(
@@ -634,6 +643,7 @@ function App() {
                   rotation={bd.rotate}
                   opacity={0.5}
                   cellSize={CELL_SIZE}
+                  showPortLabels={true}
                 />,
               )
             }
@@ -671,6 +681,7 @@ function App() {
       opacity={0.5}
       cellSize={CELL_SIZE}
       invalid={!isPreviewValid}
+      showPortLabels={true}
     />
   ) : null
 

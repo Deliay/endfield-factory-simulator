@@ -137,8 +137,8 @@ machineRegistry.register({
     { port: 'IN', x: 0, y: 0, orientation: 'N' },
     { port: 'IN', x: 1, y: 0, orientation: 'N' },
     { port: 'IN', x: 2, y: 0, orientation: 'N' },
-    { port: 'OUT', x: 2, y: 0, orientation: 'S' },
-    { port: 'OUT', x: 2, y: 1, orientation: 'S' },
+    { port: 'OUT', x: 0, y: 2, orientation: 'S' },
+    { port: 'OUT', x: 1, y: 2, orientation: 'S' },
     { port: 'OUT', x: 2, y: 2, orientation: 'S' },
   ],
   toolIcon: 'https://...',
@@ -148,7 +148,7 @@ machineRegistry.register({
 })
 ```
 - 尺寸: 3×3 网格
-- 北侧 3 个输入端口，东侧 3 个输出端口
+- 北侧 3 个输入端口，南侧 3 个输出端口
 - 无背景图，显示方框
 
 ## 碰撞检测
@@ -195,8 +195,9 @@ const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(nu
 
 ### 起点确定 (第一次点击)
 1. 如果点击的cell已有belt/belt_corner → 取其OUT方向作为 `beltStartDir`
-2. 否则搜索四方向(N/S/E/W)相邻机器的OUT port，优先级：南 > 东 > 北 > 西
-3. 如果无相邻OUT port → 禁止放置
+2. 如果点击的cell在机器内部 → 找到离点击位置最近的可用OUT port
+3. 否则搜索四方向(N/S/E/W)相邻机器的OUT port，优先级：南 > 东 > 北 > 西
+4. 如果无相邻OUT port → 禁止放置
 
 ### 路径计算 (第二次点击)
 - 起点到终点必须在同一行或同一列，或构成L型 (最多一次弯折)
@@ -342,6 +343,7 @@ interface MachineImageProps {
   opacity?: number
   cellSize: number
   invalid?: boolean
+  showPortLabels?: boolean
 }
 ```
 - 渲染顺序: backgroundImg/方框 → sideImg → gridIcon (gridIcon 不旋转)
@@ -350,6 +352,7 @@ interface MachineImageProps {
 - gridIcon 位于机器中心，**不随机器旋转**
 - sideImg 宽度/高度按机器边长缩放，N/S 方向高度为 `cellSize / 1.5`，E/W 方向宽度为 `cellSize / 1.5`
 - `invalid` 为 true 时，在机器上方显示红色半透明覆盖层 (opacity 0.3)
+- `showPortLabels` 为 true 时，在每个 port 对应方向的 cell 边缘内侧显示「入」或「出」标签 (白色文字，黑色描边，随机器旋转)
 
 ### 5. 预览机器渲染
 ```typescript
@@ -366,6 +369,7 @@ const previewMachine = placingDefinition && previewPosition ? (
     opacity={0.5}
     cellSize={CELL_SIZE}
     invalid={!isPreviewValid}
+    showPortLabels={true}
   />
 ) : null
 ```

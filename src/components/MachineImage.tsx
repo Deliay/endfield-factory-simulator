@@ -1,4 +1,4 @@
-import { Image as KonvaImage, Group, Rect } from 'react-konva'
+import { Image as KonvaImage, Group, Rect, Text } from 'react-konva'
 import type { MachineDefinition, SideImage } from '../types/Machine'
 import { useImage } from '../hooks/useImage'
 
@@ -10,6 +10,7 @@ interface MachineImageProps {
   opacity?: number
   cellSize: number
   invalid?: boolean
+  showPortLabels?: boolean
 }
 
 interface SideImageProps {
@@ -78,7 +79,7 @@ function SideImageRenderer({ side, sideImg, machineWidth, machineHeight, cellSiz
   )
 }
 
-export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize, invalid }: MachineImageProps) {
+export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize, invalid, showPortLabels }: MachineImageProps) {
   const backgroundUrl = definition.backgroundImg
   const backgroundImg = useImage(backgroundUrl || null)
   const gridIconUrl = definition.gridIcon
@@ -88,6 +89,38 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
   const height = definition.height * cellSize
   const centerX = x + width / 2
   const centerY = y + height / 2
+
+  const allDirs = ['N', 'E', 'S', 'W'] as const
+  type Dir = typeof allDirs[number]
+
+  function rotateDir(dir: Dir, rot: number): Dir {
+    const idx = allDirs.indexOf(dir)
+    return allDirs[(idx + rot / 90) % 4]
+  }
+
+  function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
+    const rotatedDir = rotateDir(orientation, rot)
+
+    let labelX = portX * cellSize + cellSize / 2 - width / 2
+    let labelY = portY * cellSize + cellSize / 2 - height / 2
+
+    switch (rotatedDir) {
+      case 'N':
+        labelY = portY * cellSize + cellSize / 4 - height / 2
+        break
+      case 'S':
+        labelY = (portY + 1) * cellSize - cellSize / 4 - height / 2
+        break
+      case 'E':
+        labelX = (portX + 1) * cellSize - cellSize / 4 - width / 2
+        break
+      case 'W':
+        labelX = portX * cellSize + cellSize / 4 - width / 2
+        break
+    }
+
+    return { x: labelX, y: labelY, text: portType === 'IN' ? '入' : '出' }
+  }
 
   return (
     <>
@@ -161,6 +194,28 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
             opacity={0.3}
           />
         )}
+        {showPortLabels && definition.ports.map((port, index) => {
+          const pos = getPortPosition(port.x, port.y, port.orientation, port.port, rotation)
+          return (
+            <Text
+              key={`port-label-${index}`}
+              text={pos.text}
+              x={pos.x}
+              y={pos.y}
+              fontSize={12}
+              fontStyle="bold"
+              fill="white"
+              stroke="black"
+              strokeWidth={2}
+              align="center"
+              verticalAlign="middle"
+              width={cellSize}
+              height={cellSize}
+              offsetX={cellSize / 2}
+              offsetY={cellSize / 2}
+            />
+          )
+        })}
       </Group>
       {gridIconImg && (
         <KonvaImage
