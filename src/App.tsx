@@ -552,9 +552,12 @@ function App() {
         if (path) {
           const pieces = computeBeltPathPieces(path, state.beltStartDir!, undefined, state.machines)
           setBeltPreviewPieces(pieces)
+          stageRef.current.container().style.cursor = 'default'
         } else {
           setBeltPreviewPieces(null)
+          stageRef.current.container().style.cursor = 'not-allowed'
         }
+        return
       }
       const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, state.machines)
       stageRef.current.container().style.cursor = allowed ? 'default' : 'not-allowed'
@@ -592,7 +595,11 @@ function App() {
         }
       } else {
         const snap = findAdjacentInPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
-        dispatch({ type: 'BELT_PLACE', x: snap ? snap.x : x, y: snap ? snap.y : y })
+        const endX = snap ? snap.x : x
+        const endY = snap ? snap.y : y
+        const path = findPath(state.beltStartPos.x, state.beltStartPos.y, endX, endY, state.machines, true)
+        if (!path) return
+        dispatch({ type: 'BELT_PLACE', x: endX, y: endY })
         if (snap) {
           dispatch({ type: 'RESET_BELT' })
           setPlacingMachine(null)
