@@ -205,19 +205,22 @@ function range(start: number, end: number, step: number = 1): number[] {
 }
 
 function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null {
-  if (inDir === outDir) return null
+  if (inDir === outDir || inDir === DIR_OPPOSITE[outDir]) return null
 
   const dirs: Dir[] = ['N', 'E', 'S', 'W']
   const inIdx = dirs.indexOf(inDir)
   const outIdx = dirs.indexOf(outDir)
-  const turnCCW = (outIdx - inIdx + 4) % 4
+  const turnCW = (outIdx - inIdx + 4) % 4
 
-  if (turnCCW === 1) {
-    return { type: 'belt_corner_ne', rotate: 0 }
-  } else if (turnCCW === 2) {
-    return { type: 'belt_corner_ne', rotate: 180 }
-  } else if (turnCCW === 3) {
-    return { type: 'belt_corner_en', rotate: 0 }
+  if (turnCW === 1) {
+    const neRotations: Record<Dir, number> = { N: 0, E: 90, S: 180, W: 270 }
+    return { type: 'belt_corner_ne', rotate: neRotations[inDir] }
+  } else if (turnCW === 2) {
+    const neRotations: Record<Dir, number> = { N: 180, E: 270, S: 0, W: 90 }
+    return { type: 'belt_corner_ne', rotate: neRotations[inDir] }
+  } else if (turnCW === 3) {
+    const enRotations: Record<Dir, number> = { N: 270, E: 0, S: 90, W: 180 }
+    return { type: 'belt_corner_en', rotate: enRotations[inDir] }
   }
 
   return null
@@ -249,17 +252,25 @@ export function computeBeltPathPieces(
     const isEnd = i === path.length - 1
 
     if (isStart && existingAtStart) {
-      pieces.push({ x: curr.x, y: curr.y, type: existingAtStart.type, rotate: existingAtStart.rotate })
       if (path.length > 1) {
         const next = path[i + 1]
-        currentDir = curr.x === next.x ? (curr.y < next.y ? 'N' : 'S') : (curr.x < next.x ? 'W' : 'E')
+        const exitDir: Dir = curr.x === next.x ? (curr.y < next.y ? 'S' : 'N') : (curr.x < next.x ? 'E' : 'W')
+        const corner = getCornerTypeAndRotation(startDir, exitDir)
+        if (corner) {
+          pieces.push({ x: curr.x, y: curr.y, type: corner.type, rotate: corner.rotate })
+        } else {
+          pieces.push({ x: curr.x, y: curr.y, type: 'belt', rotate: getBeltRotation(exitDir) })
+        }
+        currentDir = OPPOSITE[exitDir]
+      } else {
+        pieces.push({ x: curr.x, y: curr.y, type: existingAtStart.type, rotate: existingAtStart.rotate })
       }
       continue
     }
 
     let exitDir: Dir
     if (isEnd) {
-      exitDir = currentDir
+      exitDir = OPPOSITE[currentDir]
     } else {
       const next = path[i + 1]
       exitDir = curr.x === next.x ? (curr.y < next.y ? 'S' : 'N') : (curr.x < next.x ? 'E' : 'W')
@@ -290,6 +301,10 @@ function App() {
   const [placingMachine, setPlacingMachine] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
   const [placingRotation, setPlacingRotation] = useState(0)
+  const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
+  const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
+  const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
+  const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
 
   const allMachines = machineRegistry.getAll()
 
@@ -305,6 +320,9 @@ function App() {
       if (e.key === 'Escape') {
         setPlacingMachine(null)
         setPreviewPosition(null)
+        setBeltStartPos(null)
+        setBeltStartDir(null)
+        setBeltEndPos(null)
         if (stageRef.current) {
           stageRef.current.container().style.cursor = 'default'
         }
@@ -362,6 +380,16 @@ function App() {
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
+      if (placingMachine === 'belt' && beltStartPos) {
+        setBeltEndPos({ x, y })
+        const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
+        if (path) {
+          const pieces = computeBeltPathPieces(path, beltStartDir!, undefined)
+          setBeltPreviewPieces(pieces)
+        } else {
+          setBeltPreviewPieces(null)
+        }
+      }
       const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, factory.machines)
       stage.container().style.cursor = allowed ? 'default' : 'not-allowed'
     } else {
@@ -373,7 +401,31 @@ function App() {
     if (!placingMachine || !previewPosition) return
 
     if (placingMachine === 'belt') {
-      throw new NotImplementedError('Belt placement is not implemented')
+      const x = previewPosition.x
+      const y = previewPosition.y
+
+      if (!beltStartPos) {
+        const result = findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
+        if (result) {
+          setBeltStartPos({ x, y })
+          setBeltStartDir(result.dir)
+        }
+      } else {
+        const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
+        if (path) {
+          const pieces = computeBeltPathPieces(path, beltStartDir!, undefined)
+          setFactory(prev => ({
+            ...prev,
+            machines: [
+              ...prev.machines,
+              ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
+            ],
+          }))
+          setBeltStartPos({ x, y })
+          setBeltStartDir(beltStartDir!)
+        }
+      }
+      return
     }
 
     if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)) {
@@ -479,6 +531,36 @@ function App() {
     />
   ) : null
 
+  const beltPreviewMachines = placingMachine === 'belt' && beltStartPos && beltPreviewPieces ? (
+    beltPreviewPieces.map((piece, idx) => {
+      const def = machineRegistry.get(piece.type)
+      if (!def) return null
+      return (
+        <MachineImage
+          key={`belt-preview-${idx}`}
+          definition={def}
+          x={offsetX + piece.x * CELL_SIZE}
+          y={offsetY + piece.y * CELL_SIZE}
+          rotation={piece.rotate}
+          opacity={0.5}
+          cellSize={CELL_SIZE}
+        />
+      )
+    })
+  ) : null
+
+  const beltStartIndicator = placingMachine === 'belt' && beltStartPos && !beltEndPos ? (
+    <Rect
+      x={offsetX + beltStartPos.x * CELL_SIZE + 2}
+      y={offsetY + beltStartPos.y * CELL_SIZE + 2}
+      width={CELL_SIZE - 4}
+      height={CELL_SIZE - 4}
+      fill="rgba(0, 150, 255, 0.3)"
+      stroke="rgba(0, 150, 255, 0.8)"
+      strokeWidth={2}
+    />
+  ) : null
+
   return (
     <>
       <Stage
@@ -493,6 +575,8 @@ function App() {
           {lines}
           {machines}
           {previewMachine}
+          {beltStartIndicator}
+          {beltPreviewMachines}
         </Layer>
       </Stage>
       <div className="bottom-panel">

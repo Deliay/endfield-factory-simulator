@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { findAdjacentOutPort, findPath, computeBeltPathPieces } from '../App'
 import type { PlacedMachine } from '../types/Factory'
 import '../machines/storage_box'
-import { BeltCornerNeConfig, BeltCornerEnConfig } from '../machines/belt'
+import { BeltCornerNeConfig } from '../machines/belt'
 import { machineRegistry } from '../types/Machine'
 
 function createPlacedMachine(
