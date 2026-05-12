@@ -165,6 +165,7 @@ export function findAdjacentInPort(
         const feedingX = portGlobalX + DIR_DX[rotatedDir]
         const feedingY = portGlobalY + DIR_DY[rotatedDir]
         if (feedingX < 0 || feedingX >= GRID_COLS || feedingY < 0 || feedingY >= GRID_ROWS) continue
+        if (feedingX !== clickX || feedingY !== clickY) continue
         return { x: feedingX, y: feedingY }
       }
     }

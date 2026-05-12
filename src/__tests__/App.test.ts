@@ -210,6 +210,13 @@ describe('findAdjacentInPort', () => {
       const result = findAdjacentInPort(3, 2, [machine], ['S', 'E', 'N', 'W'])
       expect(result).toEqual({ x: 4, y: 2 })
     })
+
+    it('should NOT snap when port faces away from click', () => {
+      // machine at (1,1) rot 90: IN port at (3,3) dir E, feeding=(4,3)
+      // clicking north of port at (3,4) → port faces east, feeding=(4,3)≠(3,4)
+      const result = findAdjacentInPort(3, 4, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toBeNull()
+    })
   })
 
   describe('storage_box (3x3) rotated 180 degrees', () => {
