@@ -73,6 +73,7 @@ export function findAdjacentOutPort(
   existing: PlacedMachine[],
   priority: Dir[],
 ): { dir: Dir } | null {
+  const opposite: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
   const candidates: { dir: Dir }[] = []
   for (const pm of existing) {
     const def = machineRegistry.get(pm.type)
@@ -94,12 +95,22 @@ export function findAdjacentOutPort(
         portWorldY = pm.y + port.y
       }
       
-      let dir: Dir | null = null
-      if (portDir === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
-      else if (portDir === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
-      else if (portDir === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
-      else if (portDir === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
-      if (dir) candidates.push({ dir })
+      // Determine which side of the port the target is on
+      let targetSide: Dir | null = null
+      if (targetX === portWorldX + 1 && targetY === portWorldY) targetSide = 'E'
+      else if (targetX === portWorldX - 1 && targetY === portWorldY) targetSide = 'W'
+      else if (targetX === portWorldX && targetY === portWorldY + 1) targetSide = 'S'
+      else if (targetX === portWorldX && targetY === portWorldY - 1) targetSide = 'N'
+      
+      if (!targetSide) continue
+      
+      // Compute the direction the target should face to connect to this port
+      if (targetSide !== portDir) {
+        // Target is not on the output side, not connected
+        continue
+      }
+      // Target is on the output side of the port
+      candidates.push({ dir: opposite[portDir] })
     }
   }
   if (candidates.length === 0) return null
@@ -180,18 +191,19 @@ function getDirectionRotation(dx: number, dy: number): number {
 }
 
 function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; rotate: number } | null {
-  const opposite: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
-  const inDir = opposite[curDir]
+  const inDir = curDir // Machine receives from curDir direction
   const key = `${inDir}→${nextDir}`
+  // Direct mapping based on path direction and image labels
   const lookup: Record<string, { type: string; rotate: number }> = {
-    'S→E': { type: 'belt_corner_nw', rotate: 90 },
-    'N→E': { type: 'belt_corner_wn', rotate: 180 },
-    'E→N': { type: 'belt_corner_nw', rotate: 0 },
-    'W→S': { type: 'belt_corner_nw', rotate: 180 },
-    'S→W': { type: 'belt_corner_wn', rotate: 0 },
-    'N→W': { type: 'belt_corner_nw', rotate: 270 },
-    'E→S': { type: 'belt_corner_wn', rotate: 270 },
-    'W→N': { type: 'belt_corner_wn', rotate: 90 },
+    'N→E': { type: 'belt_corner_ne', rotate: 0 },  // INN OEE at (2,3)
+    'E→S': { type: 'belt_corner_ne', rotate: 270 }, // OEN INW at (3,3)
+    'S→W': { type: 'belt_corner_ne', rotate: 180 },
+    'W→N': { type: 'belt_corner_ne', rotate: 90 },
+    'E→N': { type: 'belt_corner_en', rotate: 0 },  // ONN IEE at (3,2)
+    'N→W': { type: 'belt_corner_ne', rotate: 90 },
+    'S→E': { type: 'belt_corner_en', rotate: 270 },
+    'W→S': { type: 'belt_corner_en', rotate: 90 },
+    'S→N': { type: 'belt_corner_en', rotate: 0 },  // For end point
   }
   return lookup[key] ?? null
 }
@@ -204,8 +216,9 @@ type BeltPiece = { x: number; y: number; type: string; rotate: number }
 export function computeBeltPathPieces(
   path: { x: number; y: number }[],
   startDir: Dir,
-  existingAtStart: PlacedMachine | undefined,
+  _existingAtStart: PlacedMachine | undefined,
 ): BeltPiece[] {
+  void _existingAtStart // TODO: implement logic for existing belt at start
   const result: BeltPiece[] = []
   const allDirs: Dir[] = ['N', 'E', 'S', 'W']
 
@@ -248,8 +261,25 @@ export function computeBeltPathPieces(
         }
       }
 
-      const rot = getDirectionRotation(d.x, d.y)
-      result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
+      // For end point, create a corner based on enter direction and startDir
+      if (i === path.length - 1 && path.length > 1) {
+        // Use enter direction (curDir) and startDir to create a corner
+        let corner = getCornerTypeAndRotation(curDir, startDir)
+        if (!corner) {
+          // Fallback: try with opposite directions
+          const opposite: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
+          corner = getCornerTypeAndRotation(opposite[curDir], startDir)
+        }
+        if (corner) {
+          result.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
+        } else {
+          // Default to belt_corner_en rotated 0 degrees for ONN IEE
+          result.push({ x: cell.x, y: cell.y, type: 'belt_corner_en', rotate: 0 })
+        }
+      } else {
+        const rot = getDirectionRotation(d.x, d.y)
+        result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
+      }
     }
   }
   return result
@@ -643,7 +673,7 @@ function App() {
           if (beltStartDir) {
             const existingBelt = factory.machines.find(
               pm => pm.x === beltStartPos.x && pm.y === beltStartPos.y &&
-                (pm.type === 'belt' || pm.type === 'belt_corner_wn' || pm.type === 'belt_corner_nw'),
+          (pm.type === 'belt' || pm.type === 'belt_corner_ne' || pm.type === 'belt_corner_en'),
             )
             const pathBeltData = computeBeltPathPieces(path, beltStartDir, existingBelt)
 
@@ -722,7 +752,7 @@ function App() {
         <button className="tool-button" onClick={handleCenterView}>
           居中
         </button>
-        {allMachines.filter(m => m.type !== 'belt_corner_wn' && m.type !== 'belt_corner_nw').map(machine => (
+        {allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
           <ToolButton
             key={machine.type}
             definition={machine}

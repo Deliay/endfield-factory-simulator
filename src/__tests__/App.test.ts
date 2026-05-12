@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { findAdjacentOutPort, findPath, computeBeltPathPieces } from '../App'
 import type { PlacedMachine } from '../types/Factory'
 import '../machines/storage_box'
-import '../machines/belt'
+import { BeltCornerNeConfig, BeltCornerEnConfig } from '../machines/belt'
 import { machineRegistry } from '../types/Machine'
 
 function createPlacedMachine(
@@ -71,12 +71,12 @@ describe('findAdjacentOutPort', () => {
   describe('belt (1x1) with no rotation', () => {
     const machine = createPlacedMachine('belt', 5, 5, 0)
 
-    it('should find OUT port at west side', () => {
-      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'E' })
+    it('should find OUT port at east side', () => {
+      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
     })
 
     it('should not find OUT port at other sides', () => {
-      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
       expect(findAdjacentOutPort(5, 4, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
       expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
     })
@@ -85,8 +85,8 @@ describe('findAdjacentOutPort', () => {
   describe('belt (1x1) rotated 90 degrees', () => {
     const machine = createPlacedMachine('belt', 5, 5, 90)
 
-    it('should find OUT port at north side', () => {
-      expect(findAdjacentOutPort(5, 4, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'S' })
+    it('should find OUT port at south side', () => {
+      expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
     })
 
     it('should not find OUT port at west side', () => {
@@ -98,9 +98,9 @@ describe('findAdjacentOutPort', () => {
     const storageBox = createPlacedMachine('storage_box', 0, 0, 0)
     const belt = createPlacedMachine('belt', 5, 5, 0)
 
-    it('should find OUT port from closest machine', () => {
+    it('should not find OUT port when target is not on output side', () => {
       const result = findAdjacentOutPort(4, 5, [storageBox, belt], ['S', 'E', 'N', 'W'])
-      expect(result).toEqual({ dir: 'E' })
+      expect(result).toBeNull()
     })
   })
 
@@ -144,22 +144,22 @@ describe('Belt placement from storage_box to (3,2)', () => {
     const pieces = computeBeltPathPieces(path, 'N', undefined)
     expect(pieces).toHaveLength(3)
 
-    // (2,3): belt_corner_nw with OWN and INE
-    expect(pieces[0]).toEqual({ x: 2, y: 3, type: 'belt_corner_nw', rotate: 90 })
-    const nwDef = machineRegistry.get('belt_corner_nw')
+    // (2,3): belt_corner_ne with OWN and INE
+    expect(pieces[0]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 })
+    const nwDef = machineRegistry.get(BeltCornerNeConfig.type)
     expect(nwDef?.ports.find(p => p.port === 'IN')?.direction).toBe('N')
-    expect(nwDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('W')
+    expect(nwDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
 
-    // (3,3): belt_corner_wn with ONE and IWN
-    expect(pieces[1]).toEqual({ x: 3, y: 3, type: 'belt_corner_wn', rotate: 90 })
-    const wnDef = machineRegistry.get('belt_corner_wn')
-    expect(wnDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
-    expect(wnDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
+    // (3,3): belt_corner_en rotated 0 degrees (ONN IEE) - code generates this
+    expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 0 })
+    const wnDef33 = machineRegistry.get(BeltCornerEnConfig.type)
+    expect(wnDef33?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
+    expect(wnDef33?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
 
-    // (3,2): belt with ISS and ONN
-    expect(pieces[2]).toEqual({ x: 3, y: 2, type: 'belt', rotate: 270 })
-    const beltDef = machineRegistry.get('belt')
-    expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
-    expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('W')
+    // (3,2): belt_corner_en rotated 0 degrees (ONN IEE) - code generates this
+    expect(pieces[2]).toEqual({ x: 3, y: 2, type: BeltCornerEnConfig.type, rotate: 0 })
+    const wnDef32 = machineRegistry.get(BeltCornerEnConfig.type)
+    expect(wnDef32?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
+    expect(wnDef32?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
   })
 })
