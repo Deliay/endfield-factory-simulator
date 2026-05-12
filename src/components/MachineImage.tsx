@@ -98,24 +98,40 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
     return allDirs[(idx + rot / 90) % 4]
   }
 
+  function rotatePortPosition(localX: number, localY: number, rot: number): { x: number; y: number } {
+    const cx = (definition.width - 1) / 2
+    const cy = (definition.height - 1) / 2
+    const steps = ((rot % 360) + 360) % 360 / 90
+    let x = localX
+    let y = localY
+    for (let i = 0; i < steps; i++) {
+      const newX = cy + (y - cy)
+      const newY = cy - (x - cx)
+      x = newX
+      y = newY
+    }
+    return { x, y }
+  }
+
   function getPortPosition(portX: number, portY: number, orientation: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
     const rotatedDir = rotateDir(orientation, rot)
+    const rotatedPos = rotatePortPosition(portX, portY, rot)
 
-    let labelX = portX * cellSize + cellSize / 2 - width / 2
-    let labelY = portY * cellSize + cellSize / 2 - height / 2
+    let labelX = rotatedPos.x * cellSize + cellSize / 2 - width / 2
+    let labelY = rotatedPos.y * cellSize + cellSize / 2 - height / 2
 
     switch (rotatedDir) {
       case 'N':
-        labelY = portY * cellSize + cellSize / 4 - height / 2
+        labelY = rotatedPos.y * cellSize + cellSize / 4 - height / 2
         break
       case 'S':
-        labelY = (portY + 1) * cellSize - cellSize / 4 - height / 2
+        labelY = (rotatedPos.y + 1) * cellSize - cellSize / 4 - height / 2
         break
       case 'E':
-        labelX = (portX + 1) * cellSize - cellSize / 4 - width / 2
+        labelX = (rotatedPos.x + 1) * cellSize - cellSize / 4 - width / 2
         break
       case 'W':
-        labelX = portX * cellSize + cellSize / 4 - width / 2
+        labelX = rotatedPos.x * cellSize + cellSize / 4 - width / 2
         break
     }
 

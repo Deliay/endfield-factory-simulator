@@ -70,24 +70,40 @@ function isCellOccupied(x: number, y: number, existing: PlacedMachine[]): boolea
 }
 
 function findAdjacentOutPort(
-  targetX: number,
-  targetY: number,
+  targetX: number, targetY: number,
   existing: PlacedMachine[],
   priority: Dir[],
 ): { dir: Dir } | null {
+  const allDirs: Dir[] = ['N', 'E', 'S', 'W']
   const candidates: { dir: Dir }[] = []
   for (const pm of existing) {
     const def = machineRegistry.get(pm.type)
     if (!def) continue
+    const cx = (def.width - 1) / 2
+    const cy = (def.height - 1) / 2
     for (const port of def.ports) {
       if (port.port !== 'OUT') continue
-      const portWorldX = pm.x + port.x
-      const portWorldY = pm.y + port.y
+      let localX = port.x
+      let localY = port.y
+      let orientation = port.orientation as Dir
+      if (pm.rotate % 360 !== 0) {
+        const steps = ((pm.rotate % 360) + 360) % 360 / 90
+        for (let i = 0; i < steps; i++) {
+          const newX = cy + (localY - cy)
+          const newY = cy - (localX - cx)
+          localX = newX
+          localY = newY
+        }
+        const idx = allDirs.indexOf(orientation)
+        orientation = allDirs[(idx + pm.rotate / 90) % 4]
+      }
+      const portWorldX = pm.x + localX
+      const portWorldY = pm.y + localY
       let dir: Dir | null = null
-      if (port.orientation === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
-      else if (port.orientation === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
-      else if (port.orientation === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
-      else if (port.orientation === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
+      if (orientation === 'E' && portWorldX + 1 === targetX && portWorldY === targetY) dir = 'W'
+      else if (orientation === 'W' && portWorldX - 1 === targetX && portWorldY === targetY) dir = 'E'
+      else if (orientation === 'S' && portWorldX === targetX && portWorldY + 1 === targetY) dir = 'N'
+      else if (orientation === 'N' && portWorldX === targetX && portWorldY - 1 === targetY) dir = 'S'
       if (dir) candidates.push({ dir })
     }
   }
@@ -449,15 +465,26 @@ function App() {
         if (def) {
           const allDirs: Dir[] = ['N', 'E', 'S', 'W']
           const candidates: { dir: Dir; x: number; y: number; portX: number; portY: number }[] = []
+          const cx = (def.width - 1) / 2
+          const cy = (def.height - 1) / 2
           for (const port of def.ports) {
             if (port.port !== 'OUT') continue
-            const portWorldX = clickedMachine.x + port.x
-            const portWorldY = clickedMachine.y + port.y
+            let localX = port.x
+            let localY = port.y
             let dir: Dir = port.orientation as Dir
             if (clickedMachine.rotate % 360 !== 0) {
+              const steps = ((clickedMachine.rotate % 360) + 360) % 360 / 90
+              for (let i = 0; i < steps; i++) {
+                const newX = cy + (localY - cy)
+                const newY = cy - (localX - cx)
+                localX = newX
+                localY = newY
+              }
               const idx = allDirs.indexOf(dir)
               dir = allDirs[(idx + clickedMachine.rotate / 90) % 4]
             }
+            const portWorldX = clickedMachine.x + localX
+            const portWorldY = clickedMachine.y + localY
             const tx = portWorldX + DIR_DX[dir]
             const ty = portWorldY + DIR_DY[dir]
             if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS && !isCellOccupied(tx, ty, factory.machines)) {
