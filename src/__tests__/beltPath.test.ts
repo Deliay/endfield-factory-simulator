@@ -27,8 +27,8 @@ describe('Belt path computation with storage_box', () => {
       const pieces = computeBeltPathPieces(path, 'N', undefined)
 
       expect(pieces).toEqual([
-        { x: 2, y: 3, type: 'belt_corner_wn', rotate: 90 },
-        { x: 3, y: 3, type: 'belt_corner_nw', rotate: 90 },
+        { x: 2, y: 3, type: 'belt_corner_nw', rotate: 90 },
+        { x: 3, y: 3, type: 'belt_corner_wn', rotate: 90 },
         { x: 3, y: 2, type: 'belt', rotate: 270 }
       ])
     })
@@ -46,8 +46,8 @@ describe('Belt path computation with storage_box', () => {
       const pieces = computeBeltPathPieces(path, 'N', existingBelt)
 
       expect(pieces).toEqual([
-        { x: 2, y: 3, type: 'belt_corner_wn', rotate: 90 },
-        { x: 3, y: 3, type: 'belt_corner_nw', rotate: 90 },
+        { x: 2, y: 3, type: 'belt_corner_nw', rotate: 90 },
+        { x: 3, y: 3, type: 'belt_corner_wn', rotate: 90 },
         { x: 3, y: 2, type: 'belt', rotate: 270 }
       ])
     })
@@ -60,7 +60,7 @@ describe('Belt path computation with storage_box', () => {
       const firstPiece = pieces[0]
       expect(firstPiece.x).toBe(2)
       expect(firstPiece.y).toBe(3)
-      expect(firstPiece.type).toBe('belt_corner_wn')
+      expect(firstPiece.type).toBe('belt_corner_nw')
       expect(firstPiece.rotate).toBe(90)
     })
 
@@ -70,7 +70,7 @@ describe('Belt path computation with storage_box', () => {
       const secondPiece = pieces[1]
       expect(secondPiece.x).toBe(3)
       expect(secondPiece.y).toBe(3)
-      expect(secondPiece.type).toBe('belt_corner_nw')
+      expect(secondPiece.type).toBe('belt_corner_wn')
       expect(secondPiece.rotate).toBe(90)
     })
 

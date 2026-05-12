@@ -184,14 +184,14 @@ function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; ro
   const inDir = opposite[curDir]
   const key = `${inDir}→${nextDir}`
   const lookup: Record<string, { type: string; rotate: number }> = {
-    'S→E': { type: 'belt_corner_wn', rotate: 90 },
-    'N→E': { type: 'belt_corner_nw', rotate: 180 },
-    'E→N': { type: 'belt_corner_wn', rotate: 0 },
-    'W→S': { type: 'belt_corner_wn', rotate: 180 },
-    'S→W': { type: 'belt_corner_nw', rotate: 0 },
-    'N→W': { type: 'belt_corner_wn', rotate: 270 },
-    'E→S': { type: 'belt_corner_nw', rotate: 270 },
-    'W→N': { type: 'belt_corner_nw', rotate: 90 },
+    'S→E': { type: 'belt_corner_nw', rotate: 90 },
+    'N→E': { type: 'belt_corner_wn', rotate: 180 },
+    'E→N': { type: 'belt_corner_nw', rotate: 0 },
+    'W→S': { type: 'belt_corner_nw', rotate: 180 },
+    'S→W': { type: 'belt_corner_wn', rotate: 0 },
+    'N→W': { type: 'belt_corner_nw', rotate: 270 },
+    'E→S': { type: 'belt_corner_wn', rotate: 270 },
+    'W→N': { type: 'belt_corner_wn', rotate: 90 },
   }
   return lookup[key] ?? null
 }
