@@ -7,19 +7,19 @@
 - **前端框架**: React 18+ (TypeScript)
 - **构建工具**: Vite
 - **画布库**: React Konva / Konva.js
-- **状态管理**: React useState/useEffect
+- **状态管理**: React useReducer (工厂状态) + useState (UI 状态)
 
 ## 配置参数
 
 ```typescript
-const GRID_COLS = 64      // 网格列数
-const GRID_ROWS = 64      // 网格行数
+const GRID_COLS = 16      // 网格列数
+const GRID_ROWS = 16      // 网格行数
 const CELL_SIZE = 64      // 单元格尺寸 (px)
 ```
 
 **计算值**:
-- 网格总宽度: `GRID_COLS × CELL_SIZE = 4096px`
-- 网格总高度: `GRID_ROWS × CELL_SIZE = 4096px`
+- 网格总宽度: `GRID_COLS × CELL_SIZE = 1024px`
+- 网格总高度: `GRID_ROWS × CELL_SIZE = 1024px`
 
 ## 数据模型
 
@@ -29,12 +29,7 @@ interface Port {
   port: 'IN' | 'OUT'
   x: number
   y: number
-  orientation: 'N' | 'S' | 'E' | 'W'
-}
-
-interface SideImage {
-  url: string
-  rotate?: number
+  direction: 'N' | 'S' | 'E' | 'W'
 }
 
 interface MachineDefinition {
@@ -46,21 +41,13 @@ interface MachineDefinition {
   backgroundImg?: string
   toolIcon?: string
   gridIcon?: string
-  westSideImg?: SideImage
-  northSideImg?: SideImage
-  eastSideImg?: SideImage
-  southSideImg?: SideImage
 }
 ```
 - `type`: 机器类型标识符
 - `name`: 显示名称
 - `width` 和 `height` 为整数，表示机器占用的网格数
-- `ports` 数组定义输入/输出端口，`x` 和 `y` 为整数坐标
-- `orientation`: 以 cell 为视角的端口方向 (N/S/E/W)
-- `backgroundImg`: 背景图 (可选，无则显示方框)
-- `toolIcon`: 工具栏图标
-- `gridIcon`: 网格图标 (显示在机器中心)
-- `*SideImg`: 四个方向的 side 图片 (可选)
+- `ports` 数组定义输入/输出端口，`x` 和 `y` 为整数坐标 (相对于机器左上角)
+- `direction`: 端口方向 (N/S/E/W)
 - 使用 `MachineRegistry` (Map) 管理所有机器定义，key 为 `type`
 
 ### Factory 抽象
@@ -71,12 +58,8 @@ interface PlacedMachine {
   x: number
   y: number
 }
-
-interface Factory {
-  machines: PlacedMachine[]
-}
 ```
-- `rotate` 为旋转角度
+- `rotate` 为旋转角度 (0/90/180/270)
 - `x` 和 `y` 为网格坐标
 
 ### 传送带机器 (belt)
@@ -84,182 +67,109 @@ interface Factory {
 machineRegistry.register({
   type: 'belt',
   name: '传送带',
-  width: 1,
-  height: 1,
+  width: 1, height: 1,
   ports: [
-    { port: 'IN', x: 0, y: 0, orientation: 'W' },
-    { port: 'OUT', x: 1, y: 0, orientation: 'E' },
+    { port: 'IN', x: 0, y: 0, direction: 'W' },
+    { port: 'OUT', x: 0, y: 0, direction: 'E' },
   ],
-  backgroundImg: 'https://...',
-  toolIcon: 'https://...',
 })
 ```
 - 尺寸: 1×1 网格
-- 端口: 输入端口在西侧，输出端口在东侧
+- 默认 IN=西, OUT=东 (流向 W→E)
+- 旋转 90°: IN=北, OUT=南 (流向 N→S)
+- 旋转 180°: IN=东, OUT=西 (流向 E→W)
+- 旋转 270°: IN=南, OUT=北 (流向 S→N)
 
-### 传送带弯角 (belt_corner_ws / belt_corner_sw)
+### 传送带弯角
+**belt_corner_ne** (顺时针弯角):
 ```typescript
-machineRegistry.register({
-  type: 'belt_corner_ws',
-  name: '传送带(西→南)',
-  width: 1,
-  height: 1,
-  ports: [
-    { port: 'IN', x: 0, y: 0, orientation: 'W' },
-    { port: 'OUT', x: 0, y: 1, orientation: 'S' },
-  ],
-})
-
-machineRegistry.register({
-  type: 'belt_corner_sw',
-  name: '传送带(南→西)',
-  width: 1,
-  height: 1,
-  ports: [
-    { port: 'IN', x: 0, y: 1, orientation: 'S' },
-    { port: 'OUT', x: 0, y: 0, orientation: 'W' },
-  ],
-})
+{ type: 'belt_corner_ne', IN→E, OUT→N }
 ```
-- 尺寸: 1×1 网格
-- `belt_corner_ws`: 顺时针弯角 (IN→OUT 为 西→南, 东→北, 南→西, 北→东)
-- `belt_corner_sw`: 逆时针弯角 (IN→OUT 为 南→西, 西→北, 北→东, 东→南)
-- 通过旋转实现四种朝向，不作为工具栏选项显示
+- 默认: IN=北, OUT=东 (流向 N→E)
+- 旋转 90°: IN=东, OUT=南
+- 旋转 180°: IN=南, OUT=西
+- 旋转 270°: IN=西, OUT=北
+
+**belt_corner_en** (逆时针弯角):
+```typescript
+{ type: 'belt_corner_en', IN→E, OUT→N }
+```
+- 默认: IN=东, OUT=北 (流向 E→N)
+- 旋转 90°: IN=南, OUT=东
+- 旋转 180°: IN=西, OUT=南
+- 旋转 270°: IN=北, OUT=西
+
+- 不作为工具栏选项显示
 
 ### 协议存储箱 (storage_box)
 ```typescript
-machineRegistry.register({
+{
   type: 'storage_box',
-  name: '协议存储箱',
-  width: 3,
-  height: 3,
+  width: 3, height: 3,
   ports: [
-    { port: 'IN', x: 0, y: 0, orientation: 'N' },
-    { port: 'IN', x: 1, y: 0, orientation: 'N' },
-    { port: 'IN', x: 2, y: 0, orientation: 'N' },
-    { port: 'OUT', x: 0, y: 2, orientation: 'S' },
-    { port: 'OUT', x: 1, y: 2, orientation: 'S' },
-    { port: 'OUT', x: 2, y: 2, orientation: 'S' },
+    { port: 'IN', x: 0, y: 0, direction: 'N' },
+    { port: 'IN', x: 1, y: 0, direction: 'N' },
+    { port: 'IN', x: 2, y: 0, direction: 'N' },
+    { port: 'OUT', x: 0, y: 2, direction: 'S' },
+    { port: 'OUT', x: 1, y: 2, direction: 'S' },
+    { port: 'OUT', x: 2, y: 2, direction: 'S' },
   ],
-  toolIcon: 'https://...',
-  gridIcon: 'https://...',
-  northSideImg: { url: 'https://...' },
-  southSideImg: { url: 'https://...', rotate: 180 },
-})
+}
 ```
 - 尺寸: 3×3 网格
 - 北侧 3 个输入端口，南侧 3 个输出端口
-- 无背景图，显示方框
+- 未旋转时 OUT 方向为南
 
 ## 碰撞检测
 
 ### getOccupiedCells
-```typescript
-function getOccupiedCells(
-  definition: { width: number; height: number },
-  x: number,
-  y: number,
-  rotate: number,
-): Set<string>
-```
 - 计算机器在给定位置和旋转下所占用的所有网格单元
-- 旋转 0° 或 180° 时使用原始 width/height，旋转 90° 或 270° 时交换
+- 旋转 0°/180° 时使用原始 width/height，旋转 90°/270° 时交换
 - 返回 `Set<string>`，每个元素格式为 `"col,row"`
 
 ### canPlaceMachine
-```typescript
-function canPlaceMachine(
-  type: string,
-  x: number,
-  y: number,
-  rotate: number,
-  existing: PlacedMachine[],
-): boolean
-```
 - 检查机器是否可以放置在指定位置
 - 边界检查: 机器不能超出网格范围
 - 重叠检查: 新机器的任何单元格不能与已有机器的单元格重叠
-- 返回 `true` 表示允许放置，`false` 表示禁止
 
-## 传送带放置模式
+## 状态管理
 
-### 状态
+### useReducer (appReducer)
 ```typescript
-const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
-const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
-const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
+interface AppState {
+  machines: PlacedMachine[]
+  beltStartPos: { x: number; y: number } | null
+  beltStartDir: Dir | null
+}
+
+type AppAction =
+  | { type: 'BELT_SET_START'; pos: { x: number; y: number }; dir: Dir }
+  | { type: 'BELT_PLACE'; x: number; y: number }
+  | { type: 'PLACE_MACHINE'; machineType: string; rotate: number; x: number; y: number }
+  | { type: 'RESET_BELT' }
 ```
-- `beltStartPos`: 起始cell坐标
-- `beltStartDir`: 起始方向 (belt的OUT方向，即路径前进方向)
-- `beltEndPos`: 鼠标当前指向的终点cell (用于路径预览)
 
-### 起点确定 (第一次点击)
-1. 如果点击的cell已有belt/belt_corner → 可以改变点击的cell的belt形状
-2. 如果点击的cell在机器内部 → 找到离点击位置最近的可用OUT port，注意这里机器的out port方位始终和起始点传送带的in方位对应
-3. 否则搜索四方向(N/S/E/W)相邻机器的OUT port，优先级：南 > 东 > 北 > 西
-4. 如果无相邻OUT port → 禁止放置
+- `BELT_SET_START`: 第一次点击传送带时，确定起点和方向
+- `BELT_PLACE`: 后续点击传送带时，计算路径并放置，自动更新连续放置的起点
+- `PLACE_MACHINE`: 放置非传送带机器
+- `RESET_BELT`: 取消传送带放置 (Escape 或切换工具)
 
-### 路径计算 (第二次点击)
-- 起点到终点必须在同一行或同一列，或构成L型 (最多一次弯折)
-- L型路径有两种: 先水平后垂直 / 先垂直后水平，取第一个可行路径
-- 路径上除起点外的所有cell不能有机器
+### useState (UI 状态)
+```typescript
+const [placingMachine, setPlacingMachine] = useState<string | null>(null)
+const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
+const [placingRotation, setPlacingRotation] = useState(0)
+const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
+const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<...> | null>(null)
+```
 
-### 放置逻辑
-1. 如果起点已有belt且方向与路径第一段不同 → 删除旧belt，添加belt_corner
-2. 如果起点无belt → 放置一个belt (方向由 `beltStartDir` 决定)
-3. 路径上每个cell: 直线段放belt，弯折处放belt_corner
-4. 放置后，终点变为新起点，`beltStartDir` 为路径最后一段方向
-5. 可继续点击下一个终点，实现连续放置
+## 核心函数
 
-### 放置测试用例
-假定storage_box在 (1,1)放置且不旋转，左上角为(1,1)，右下角为(3,3)，即(3,3)-南为out port.
-
-CASE1: 点击(3,3)作为起始点，起始点会自动计算为(3,4)
-CASE2: 点击(3,4)作为起始点，结束点选为(4,3)，会产生3个点
-
-- (3,4): belt_corner_ne, 不旋转
-- (4,4): belt_corner_ne, 旋转270
-- (4,3): belt, 旋转270
-
-CASE3: 点击(3,4)作为起始点，结束点选为(4,5)，会产生3个点
-
-- (3,4): belt_corner_ne, 不旋转
-- (4,4): belt_corner_en, 旋转180
-- (4,5): belt, 旋转90
-
-CASE4: 点击(3,4)作为起始点，结束点选为(2,5)，会产生3个点
-
-- (3,4): belt_corner_en, 旋转270
-- (2,4): belt_corner_ne, 旋转90
-- (2,5): belt, 旋转90
-
-CASE5: 点击(3,4)作为起始点，结束点选为(0,2)，会产生6个点
-
-- (3,4): belt_corner_en, 旋转270
-- (2,4): belt, 旋转180
-- (1,4): belt, 旋转180
-- (0,4): belt_corner_en, 不旋转
-- (0,3): belt, 旋转270
-- (0,2): belt, 旋转270
-
-CASE6: 点击(3,4)作为起始点，结束点选为(0,4)，产生4个点
-
-- (3,4): belt_corner_en, 旋转270
-- (2,4): belt, 旋转180
-- (1,4): belt, 旋转180
-- (0,4): belt, 旋转180
-
-CASE7: 点击(3,4)作为起始点，现在有2个结束点，产生3个点：
-CASE7.1 到达结束点(4,4)时
-
-- (3,4): belt_corner_ne, 不旋转
-- (4,4): belt, 不旋转
-
-CASE 7.2 到达结束点(4,3)时，提示：此时起始点应该是上一个结束点(4,4)
-
-- (4,4): 由belt, 不旋转替换为belt_corner_ne, 旋转270
-- (4,3): belt, 旋转270
-
+### getMachineCells
+```typescript
+function getMachineCells(pm: PlacedMachine): Array<{ x: number; y: number }>
+```
+- 返回机器占用的所有网格单元
 
 ### findAdjacentOutPort
 ```typescript
@@ -269,8 +179,19 @@ function findAdjacentOutPort(
   priority: Dir[],
 ): { dir: Dir } | null
 ```
-- 搜索四方向相邻机器的OUT port
+- 搜索四方向相邻机器的 OUT port
 - 按 priority 顺序返回第一个匹配的方向
+- 返回值: belt 的起始方向 (与机器 OUT port 方向相反，即 belt 的 IN 方向)
+
+### findMachineOutPort
+```typescript
+function findMachineOutPort(
+  clickX: number, clickY: number,
+  existing: PlacedMachine[],
+): { outX: number; outY: number; dir: Dir } | null
+```
+- 当点击在机器内部时，找到离点击位置最近的可用 OUT port
+- 返回 out 口相邻的 belt 坐标和起始方向
 
 ### findPath
 ```typescript
@@ -281,358 +202,189 @@ function findPath(
   excludeStart: boolean,
 ): { x: number; y: number }[] | null
 ```
-- 计算从起点到终点的L型路径 (最多一次弯折)
-- 返回路径cell数组，或 null (无可行路径)
-- `excludeStart`: 是否排除起点的占用检查
+- 计算从起点到终点的路径 (直线或 L 型)
+- 直线: 同行或同列
+- L 型: 先水平后垂直 / 先垂直后水平，取第一个可行路径
+- 路径上除起点外的所有 cell 不能有机器
+- 路径起点为 start，终点为 end (从 start 到 end 的有序方向)
 
 ### getCornerTypeAndRotation
 ```typescript
 function getCornerTypeAndRotation(inDir: Dir, outDir: Dir): { type: string; rotate: number } | null
 ```
-- 根据进入方向和离开方向确定corner类型和旋转
-- 顺时针转弯 → `belt_corner_ws`，逆时针转弯 → `belt_corner_sw`
+- 根据进入方向和离开方向确定 corner 类型和旋转
+- 顺时针转弯 (右转) → `belt_corner_ne`
+- 逆时针转弯 (左转) → `belt_corner_en`
+- 直线 (in === out 或 in === opposite(out)) → null
+- 180° 掉头 → `belt_corner_ne` (用两段拼)
 
-## 状态管理
+转弯判定:
+- inDir → outDir 顺时针转一步 (N→E, E→S, S→W, W→N): ne, rotate=inDir
+- inDir → outDir 顺时针转两步 (N→S, E→W, S→N, W→E): ne, rotate=opposite(inDir)
+- inDir → outDir 顺时针转三步 (N→W, W→S, S→E, E→N): en, rotate=inDir
 
-### dimensions 状态
+方向到旋转角度映射:
+- belt_corner_ne: N:0, E:90, S:180, W:270 (入口方向对应角度)
+- belt_corner_ne (掉头): N:180, E:270, S:0, W:90 (入口反向对应角度)
+- belt_corner_en: N:270, E:0, S:90, W:180 (入口方向对应角度)
+
+### getBeltRotation
 ```typescript
-const [dimensions, setDimensions] = useState({
-  width: window.innerWidth,
-  height: window.innerHeight,
-})
+function getBeltRotation(dir: Dir): number
 ```
-- 存储窗口尺寸
-- 监听 `resize` 事件自动更新
+- N:270, E:0, S:90, W:180 (朝向出口方向)
 
-### factory 状态
+### computeBeltPathPieces
 ```typescript
-const [factory, setFactory] = useState<Factory>({
-  machines: [],
-})
+function computeBeltPathPieces(
+  path: { x: number; y: number }[],
+  startDir: Dir,
+  existingAtStart: PlacedMachine | undefined,
+): Array<{ x: number; y: number; type: string; rotate: number }>
 ```
-- 存储工厂中放置的机器
-- 通过 `setFactory` 更新机器列表
+- 遍历路径，计算每个 cell 的 belt 类型和旋转
+- 关键逻辑:
+  1. 起点已有 belt → 如果 direction 不变则保留，否则替换为 corner
+  2. 直线段 (entry == opposite(exit)) → belt
+  3. 弯折处 → getCornerTypeAndRotation 确定类型和旋转
+  4. 终点 → exitDir = opposite(entryDir)，旋转由 exitDir 决定
 
-### placingMachine 状态
-```typescript
-const [placingMachine, setPlacingMachine] = useState<string | null>(null)
-const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
-const [placingRotation, setPlacingRotation] = useState(0)
-const [beltStartPos, setBeltStartPos] = useState<{ x: number; y: number } | null>(null)
-const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
-const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
-```
-- `placingMachine`: 当前正在放置的机器类型，null 表示未在放置模式，`'belt'` 表示传送带放置模式
-- `previewPosition`: 预览位置的网格坐标
-- `placingRotation`: 当前放置机器的旋转角度 (0, 90, 180, 270)
-- `beltStartPos`: 传送带放置的起始cell
-- `beltStartDir`: 传送带起始方向 (OUT方向)
-- `beltEndPos`: 传送带放置的终点cell (鼠标跟踪)
+## 传送带放置流程
+
+### 选择工具
+- 点击工具栏 belt 按钮 → `placingMachine = 'belt'`, 清除之前的起点
+
+### 第一次点击 (确定起点)
+1. `state.beltStartPos` 为 null → 进入起点确定逻辑
+2. 如果点击 cell 已有 belt/belt_corner → 直接使用该 cell 作为起点，entryDir 来自机器的 IN port 方向
+3. 如果点击 cell 在机器内部 → 调用 `findMachineOutPort`，找到最近的 OUT port
+4. 否则 → 调用 `findAdjacentOutPort` 搜索相邻机器的 OUT port (优先级: 南 > 东 > 北 > 西)
+5. dispatch `BELT_SET_START` 设置起点和方向
+
+### 后续点击 (放置并继续)
+1. `state.beltStartPos` 非 null → dispatch `BELT_PLACE`
+2. reducer 中:
+   a. `findPath` 计算路径
+   b. `computeBeltPathPieces` 计算每段类型和旋转
+   c. 删除起点原有机器 (filter)，添加新计算的 pieces
+   d. 更新 `beltStartPos` 为当前点击位置，`beltStartDir` 为路径最后一段的 OPPOSITE 方向
+
+### 预览
+- `handleMouseMove`: 当 `placingMachine === 'belt'` 且 `state.beltStartPos` 非 null 时
+  - 计算路径并调用 `computeBeltPathPieces` → 设置 `beltPreviewPieces`
+  - 半透明渲染预览
+
+### 取消
+- Escape: dispatch `RESET_BELT` + 清除预览状态
+
+## 放置测试用例
+
+假定 storage_box 在 (1,1)放置且不旋转，左上角为(1,1)，右下角为(3,3)。
+
+CASE1: 点击(3,3)作为起始点 → findMachineOutPort 返回 (3,4) dir=N
+
+CASE2: 起点(3,4) dir=N, 终点(4,3)
+- (3,4): belt_corner_ne@0
+- (4,4): belt_corner_ne@270
+- (4,3): belt@270
+
+CASE3: 起点(3,4) dir=N, 终点(4,5)
+- (3,4): belt_corner_ne@0
+- (4,4): belt_corner_en@180
+- (4,5): belt@90
+
+CASE4: 起点(3,4) dir=N, 终点(2,5)
+- (3,4): belt_corner_en@270
+- (2,4): belt_corner_ne@90
+- (2,5): belt@90
+
+CASE5: 起点(3,4) dir=N, 终点(0,2)
+- (3,4): belt_corner_en@270
+- (2,4): belt@180
+- (1,4): belt@180
+- (0,4): belt_corner_en@0
+- (0,3): belt@270
+- (0,2): belt@270
+
+CASE6: 起点(3,4) dir=N, 终点(0,4)
+- (3,4): belt_corner_en@270
+- (2,4): belt@180
+- (1,4): belt@180
+- (0,4): belt@180
+
+CASE7: 连续放置
+CASE7.1: 起点(3,4) dir=N, 终点(4,4)
+- (3,4): belt_corner_ne@0
+- (4,4): belt@0
+
+CASE7.2: 起点(4,4) dir=W (上一次的结束方向), 终点(4,3)
+- 此时 (4,4) 已有 belt@0, existingAtStart 为 belt@0
+- computeBeltPathPieces 检查: startDir=W, exitDir=N → 弯折 → belt_corner_ne@270
+- (4,4): belt_corner_ne@270 (替换原来的 belt@0)
+- (4,3): belt@270
+
+## 方向与旋转对照
+
+### 流向映射
+belt 默认流向 W→E (IN=西, OUT=东)
+| 旋转 | IN方向 | OUT方向 | 流向 |
+|------|--------|---------|------|
+| 0°   | W      | E       | W→E  |
+| 90°  | N      | S       | N→S  |
+| 180° | E      | W       | E→W  |
+| 270° | S      | N       | S→N  |
+
+belt_corner_ne 默认流向 N→E
+| 旋转 | IN方向 | OUT方向 |
+|------|--------|---------|
+| 0°   | N      | E       |
+| 90°  | E      | S       |
+| 180° | S      | W       |
+| 270° | W      | N       |
+
+belt_corner_en 默认流向 E→N
+| 旋转 | IN方向 | OUT方向 |
+|------|--------|---------|
+| 0°   | E      | N       |
+| 90°  | S      | E       |
+| 180° | W      | S       |
+| 270° | N      | W       |
 
 ## 画布渲染逻辑
 
-### 1. 网格居中计算
+### 网格居中
 ```typescript
 const offsetX = (dimensions.width - gridWidth) / 2
 const offsetY = (dimensions.height - gridHeight) / 2
 ```
-- 网格在视口中居中显示
 
-### 2. 网格背景与线条绘制
-
-**网格背景**:
-- 使用 `Rect` 绘制灰色背景
-- 位置: `(offsetX, offsetY)`
-- 尺寸: `gridWidth × gridHeight`
-- 颜色: `#7f7f7f` (灰色)
-
-**垂直线** (65 条):
-- 循环: `i = 0` 到 `GRID_COLS`
-- 坐标: `(offsetX + i * CELL_SIZE, offsetY)` → `(offsetX + i * CELL_SIZE, offsetY + gridHeight)`
-
-**水平线** (65 条):
-- 循环: `j = 0` 到 `GRID_ROWS`
-- 坐标: `(offsetX, offsetY + j * CELL_SIZE)` → `(offsetX + gridWidth, offsetY + j * CELL_SIZE)`
-
-**线条样式**:
-- 颜色: `#333` (深灰色)
-- 宽度: `1px`
-
-### 3. 机器渲染
-```typescript
-const machines = factory.machines.map((placedMachine, index) => {
-  const definition = machineRegistry.get(placedMachine.type)
-  if (!definition) return null
-
-  const x = offsetX + placedMachine.x * CELL_SIZE
-  const y = offsetY + placedMachine.y * CELL_SIZE
-
-  return (
-    <MachineImage
-      key={`machine-${index}`}
-      definition={definition}
-      x={x}
-      y={y}
-      rotation={placedMachine.rotate}
-      cellSize={CELL_SIZE}
-    />
-  )
-})
-```
-- 根据机器类型从 Registry 获取定义
-- 使用通用 `MachineImage` 组件渲染
-- 支持旋转，围绕中心点旋转 (gridIcon 除外)
-
-### 4. MachineImage 组件
-```typescript
-interface MachineImageProps {
-  definition: MachineDefinition
-  x: number
-  y: number
-  rotation: number
-  opacity?: number
-  cellSize: number
-  invalid?: boolean
-  showPortLabels?: boolean
-}
-```
-- 渲染顺序: backgroundImg/方框 → sideImg → gridIcon (gridIcon 不旋转)
-- 无 backgroundImg 时显示 2px 粗的方框 (宽高各减 16px，颜色 `#000`)
-- sideImg 位于机器边缘内侧
-- gridIcon 位于机器中心，**不随机器旋转**
-- sideImg 宽度/高度按机器边长缩放，N/S 方向高度为 `cellSize / 1.5`，E/W 方向宽度为 `cellSize / 1.5`
-- `invalid` 为 true 时，在机器上方显示红色半透明覆盖层 (opacity 0.3)
-- `showPortLabels` 为 true 时，在每个 port 对应方向的 cell 边缘内侧显示「入」或「出」标签 (白色文字，黑色描边，随机器旋转)
-
-### 5. 预览机器渲染
-```typescript
-const placingDefinition = placingMachine ? machineRegistry.get(placingMachine) : null
-const isPreviewValid = placingMachine && previewPosition
-  ? canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)
-  : true
-const previewMachine = placingDefinition && previewPosition ? (
-  <MachineImage
-    definition={placingDefinition}
-    x={offsetX + previewPosition.x * CELL_SIZE}
-    y={offsetY + previewPosition.y * CELL_SIZE}
-    rotation={placingRotation}
-    opacity={0.5}
-    cellSize={CELL_SIZE}
-    invalid={!isPreviewValid}
-    showPortLabels={true}
-  />
-) : null
-```
-- 仅在放置预览模式下显示
-- 位置跟随鼠标指针
-- 半透明效果 (opacity: 0.5)
-- 支持旋转预览，围绕中心点旋转
-- 当放置位置与已有机器重叠时，`invalid` 为 true，显示红色覆盖层
+### 渲染顺序
+1. 网格背景 (Rect, `#7f7f7f`)
+2. 垂直线和水平线 (Line, `#333`, 1px)
+3. 已放置的机器 (state.machines.map → MachineImage)
+4. 预览机器 (半透明 MachineImage)
+5. Belt 起始指示器 (蓝色半透明 Rect)
+6. Belt 预览 (半透明 MachineImage)
 
 ## 交互功能
 
 ### 画布拖动
-- Stage 组件设置 `draggable` 属性
-- 支持鼠标拖动平移视图
-- 在放置预览模式下禁用拖动 (`draggable={!placingMachine}`)
+- Stage `draggable={!placingMachine}`
+- 放置模式下禁用拖动
 
-### 居中工具
-```typescript
-const stageRef = useRef<StageType>(null)
+### 鼠标移动 (handleMouseMove)
+- 计算鼠标在网格中的坐标
+- 设置 previewPosition
+- Belt 预览: 计算路径并设置 beltPreviewPieces
+- 碰撞检测: 改变光标样式
 
-const handleCenterView = () => {
-  if (stageRef.current) {
-    stageRef.current.position({ x: 0, y: 0 })
-    stageRef.current.batchDraw()
-  }
-}
-```
-- 使用 `useRef` 引用 Stage 组件
-- 点击按钮将画布位置重置到 `(0, 0)`
-- 网格自动居中显示
+### 点击放置 (handleClick)
+- Belt: 两阶段 (起点确定 → 放置并连续)
+- 非 belt: 碰撞检测 → dispatch PLACE_MACHINE → 退出放置模式
 
-### 机器选择工具
-```typescript
-const handleSelectMachine = (type: string) => {
-  setPlacingMachine(type)
-  setPreviewPosition(null)
-  setPlacingRotation(0)
-}
-```
-- 从 machineRegistry 自动生成工具栏按钮
-- 使用 `ToolButton` 组件渲染
-
-### 鼠标交互
-```typescript
-const handleMouseMove = () => {
-  if (!placingMachine || !stageRef.current) return
-  const stage = stageRef.current
-  const pointer = stage.getPointerPosition()
-  if (!pointer) return
-
-  const stagePos = stage.position()
-  const stageScale = stage.scaleX()
-
-  const x = Math.floor((pointer.x - stagePos.x - offsetX) / (CELL_SIZE * stageScale))
-  const y = Math.floor((pointer.y - stagePos.y - offsetY) / (CELL_SIZE * stageScale))
-
-  if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
-    setPreviewPosition({ x, y })
-    const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, factory.machines)
-    stage.container().style.cursor = allowed ? 'default' : 'not-allowed'
-  } else {
-    stage.container().style.cursor = 'not-allowed'
-  }
-}
-
-const handleClick = () => {
-  if (!placingMachine || !previewPosition) return
-
-  if (!canPlaceMachine(placingMachine, previewPosition.x, previewPosition.y, placingRotation, factory.machines)) {
-    return
-  }
-
-  setFactory(prev => ({
-    ...prev,
-    machines: [
-      ...prev.machines,
-      {
-        type: placingMachine,
-        rotate: placingRotation,
-        x: previewPosition.x,
-        y: previewPosition.y,
-      },
-    ],
-  }))
-
-  setPlacingMachine(null)
-  setPreviewPosition(null)
-}
-```
-- 鼠标移动时，预览位置跟随鼠标（半透明显示）
-- 点击鼠标左键确认放置，写入 factory.machines
-- 按 Escape 键取消放置
-- 按 R 键旋转 90 度
-- **放置限制**: 如果机器与已有机器重叠，不允许放置，鼠标指针变为禁止图标，预览显示红色覆盖层
-
-### 键盘事件处理
-```typescript
-useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setPlacingMachine(null)
-      setPreviewPosition(null)
-      if (stageRef.current) {
-        stageRef.current.container().style.cursor = 'default'
-      }
-    }
-    if (e.key === 'r' || e.key === 'R') {
-      if (placingMachine) {
-        setPlacingRotation(prev => (prev + 90) % 360)
-      }
-    }
-  }
-  window.addEventListener('keydown', handleKeyDown)
-  return () => window.removeEventListener('keydown', handleKeyDown)
-}, [placingMachine])
-```
-- Escape: 取消放置模式，重置鼠标指针为默认
-- R: 旋转机器 90 度
-- 依赖数组包含 `placingMachine`，确保获取最新状态
-
-## 响应式设计
-
-### 窗口尺寸监听
-```typescript
-useEffect(() => {
-  const handleResize = () => {
-    setDimensions({
-      width: window.innerWidth,
-      height: window.innerHeight,
-    })
-  }
-  window.addEventListener('resize', handleResize)
-  return () => window.removeEventListener('resize', handleResize)
-}, [])
-```
-- 窗口大小变化时自动更新画布尺寸
-- 网格始终保持居中
-
-## 样式配置
-
-### 背景色
-- 应用背景: 黑色 (`#000`)
-- 网格背景: 灰色 (`#7f7f7f`)
-- 通过 CSS 变量 `--bg` 控制
-
-### 画布尺寸
-- 宽度: `window.innerWidth` (100vw)
-- 高度: `window.innerHeight` (100vh)
-- 溢出: 隐藏 (`overflow: hidden`)
-
-### 底部悬浮面板
-```css
-.bottom-panel {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: fit-content;
-  min-width: 128px;
-  height: 128px;
-  background: rgba(0, 0, 0, 0.8);
-  border-top: 1px solid #333;
-  border-left: 1px solid #333;
-  border-right: 1px solid #333;
-  border-radius: 8px 8px 0 0;
-  z-index: 10;
-}
-```
-- 位置: 固定在底部居中
-- 尺寸: 宽度自适应内容，最小宽度 128px，高度 128px
-- 样式: 半透明黑色背景，顶部圆角，灰色边框
-- 层级: z-index 10，覆盖在画布之上
-
-### 工具按钮
-```css
-.tool-button {
-  background: #333;
-  color: #fff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-}
-```
-- 背景: 深灰色 (`#333`)
-- 文字: 白色
-- 悬停效果: 背景变亮 (`#444`)
-- 点击效果: 背景更亮 (`#555`)
-
-### 活动按钮
-```css
-.tool-button.active {
-  background: #0066cc;
-  border-color: #0088ff;
-}
-```
-- 背景: 蓝色 (`#0066cc`)
-- 边框: 亮蓝色 (`#0088ff`)
-- 表示当前正在放置预览模式
-
-### 工具图标
-```css
-.tool-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-```
-- 尺寸: 20×20px
-- 间距: 右侧 8px
-- 对齐: 垂直居中
+### 键盘事件
+- Escape: 取消放置，清除起点
+- R: 旋转当前放置的机器 90°
 
 ## 文件结构
 
@@ -644,12 +396,14 @@ src/
 ├── hooks/
 │   └── useImage.ts         # 图片加载 hook
 ├── machines/
-│   ├── belt.ts             # 传送带定义
+│   ├── belt.ts             # 传送带定义 (belt, belt_corner_ne, belt_corner_en)
 │   └── storage_box.ts      # 协议存储箱定义
 ├── types/
 │   ├── Machine.ts          # 机器类型定义和 Registry
 │   └── Factory.ts          # 工厂类型定义
-├── App.tsx                 # 主应用组件
+├── utils/
+│   └── rotation.ts         # 方向旋转工具函数
+├── App.tsx                 # 主应用组件 (包含所有核心算法)
 └── main.tsx                # 入口文件
 ```
 
@@ -659,5 +413,3 @@ src/
 1. 创建 `src/machines/xxx.ts`
 2. 定义机器并调用 `machineRegistry.register()`
 3. 在 `App.tsx` 导入该文件 (`import './machines/xxx'`)
-
-工具栏和渲染逻辑会自动适配。
