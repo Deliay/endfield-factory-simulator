@@ -1,0 +1,122 @@
+import { describe, it, expect } from 'vitest'
+import { findAdjacentOutPort } from '../App'
+import type { PlacedMachine } from '../types/Factory'
+import '../machines/storage_box'
+import '../machines/belt'
+
+function createPlacedMachine(
+  type: string,
+  x: number,
+  y: number,
+  rotate: number = 0
+): PlacedMachine {
+  return { type, x, y, rotate }
+}
+
+describe('findAdjacentOutPort', () => {
+  describe('storage_box (3x3) with no rotation', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 0)
+
+    it('should find OUT port at south side for cells below', () => {
+      expect(findAdjacentOutPort(0, 3, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
+      expect(findAdjacentOutPort(1, 3, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
+      expect(findAdjacentOutPort(2, 3, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
+    })
+
+    it('should not find OUT port for cells above', () => {
+      expect(findAdjacentOutPort(0, -1, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+
+    it('should not find OUT port for cells at sides', () => {
+      expect(findAdjacentOutPort(-1, 2, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+      expect(findAdjacentOutPort(3, 2, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+
+  describe('storage_box (3x3) rotated 90 degrees', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 90)
+
+    it('should find OUT port at west side for cells to the left', () => {
+      expect(findAdjacentOutPort(-1, 0, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'E' })
+      expect(findAdjacentOutPort(-1, 1, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'E' })
+      expect(findAdjacentOutPort(-1, 2, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'E' })
+    })
+
+    it('should not find OUT port at original south position', () => {
+      expect(findAdjacentOutPort(0, 3, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+
+  describe('storage_box (3x3) rotated 180 degrees', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 180)
+
+    it('should find OUT port at north side for cells above', () => {
+      expect(findAdjacentOutPort(0, -1, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'S' })
+      expect(findAdjacentOutPort(1, -1, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'S' })
+      expect(findAdjacentOutPort(2, -1, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'S' })
+    })
+  })
+
+  describe('storage_box (3x3) rotated 270 degrees', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 270)
+
+    it('should find OUT port at east side for cells to the right', () => {
+      expect(findAdjacentOutPort(3, 0, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
+      expect(findAdjacentOutPort(3, 1, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
+      expect(findAdjacentOutPort(3, 2, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
+    })
+  })
+
+  describe('belt (1x1) with no rotation', () => {
+    const machine = createPlacedMachine('belt', 5, 5, 0)
+
+    it('should find OUT port at east side', () => {
+      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'W' })
+    })
+
+    it('should not find OUT port at other sides', () => {
+      expect(findAdjacentOutPort(4, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+      expect(findAdjacentOutPort(5, 4, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+      expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+
+  describe('belt (1x1) rotated 90 degrees', () => {
+    const machine = createPlacedMachine('belt', 5, 5, 90)
+
+    it('should find OUT port at south side', () => {
+      expect(findAdjacentOutPort(5, 6, [machine], ['S', 'E', 'N', 'W'])).toEqual({ dir: 'N' })
+    })
+
+    it('should not find OUT port at east side', () => {
+      expect(findAdjacentOutPort(6, 5, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+
+  describe('multiple machines', () => {
+    const storageBox = createPlacedMachine('storage_box', 0, 0, 0)
+    const belt = createPlacedMachine('belt', 5, 5, 0)
+
+    it('should find OUT port from closest machine', () => {
+      const result = findAdjacentOutPort(6, 5, [storageBox, belt], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ dir: 'W' })
+    })
+  })
+
+  describe('priority', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 0)
+
+    it('should respect priority order', () => {
+      const result = findAdjacentOutPort(0, 3, [machine], ['E', 'S', 'N', 'W'])
+      expect(result).toEqual({ dir: 'N' })
+    })
+  })
+
+  describe('no adjacent ports', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 0)
+
+    it('should return null when no ports are adjacent', () => {
+      expect(findAdjacentOutPort(10, 10, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+})

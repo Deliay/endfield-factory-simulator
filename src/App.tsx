@@ -68,7 +68,7 @@ function isCellOccupied(x: number, y: number, existing: PlacedMachine[]): boolea
   return false
 }
 
-function findAdjacentOutPort(
+export function findAdjacentOutPort(
   targetX: number, targetY: number,
   existing: PlacedMachine[],
   priority: Dir[],
