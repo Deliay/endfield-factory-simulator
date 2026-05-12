@@ -199,7 +199,7 @@ function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; ro
     'E→S': { type: 'belt_corner_ne', rotate: 270 }, // OEN INW at (3,3)
     'S→W': { type: 'belt_corner_ne', rotate: 180 },
     'W→N': { type: 'belt_corner_ne', rotate: 90 },
-    'E→N': { type: 'belt_corner_en', rotate: 0 },  // ONN IEE at (3,2)
+    'E→N': { type: 'belt_corner_ne', rotate: 270 }, // INW OEN at (3,3) - changed from belt_corner_en
     'N→W': { type: 'belt_corner_ne', rotate: 90 },
     'S→E': { type: 'belt_corner_en', rotate: 270 },
     'W→S': { type: 'belt_corner_en', rotate: 90 },
@@ -261,21 +261,34 @@ export function computeBeltPathPieces(
         }
       }
 
-      // For end point, create a corner based on enter direction and startDir
+      // For end point, create a regular belt oriented to face the start direction
       if (i === path.length - 1 && path.length > 1) {
-        // Use enter direction (curDir) and startDir to create a corner
-        let corner = getCornerTypeAndRotation(curDir, startDir)
-        if (!corner) {
-          // Fallback: try with opposite directions
+        // For end point, we want a regular belt that faces the start direction
+        // The belt should receive from the opposite of enter direction and output towards the start direction
+        // Regular belt default: IN direction W, OUT direction E
+        
+        // Calculate rotation needed (clockwise)
+        // We need to rotate so that:
+        // - IN port faces opposite of curDir (receive from the direction data came from)
+        // - OUT port faces startDir (start direction)
+        
+        const dirs: Dir[] = ['N', 'E', 'S', 'W']
+        const defaultInIndex = dirs.indexOf('W') // Default IN direction
+        const defaultOutIndex = dirs.indexOf('E') // Default OUT direction
+        
+        // IN port should face opposite of curDir (data came from curDir, so IN should face opposite)
+        const oppositeOfCurDir = ((): Dir => {
           const opposite: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' }
-          corner = getCornerTypeAndRotation(opposite[curDir], startDir)
-        }
-        if (corner) {
-          result.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
-        } else {
-          // Default to belt_corner_en rotated 0 degrees for ONN IEE
-          result.push({ x: cell.x, y: cell.y, type: 'belt_corner_en', rotate: 0 })
-        }
+          return opposite[curDir]
+        })()
+        
+        const targetInIndex = dirs.indexOf(oppositeOfCurDir) // Should face opposite of where data came from
+        const targetOutIndex = dirs.indexOf(startDir) // Should face start direction
+        
+        // Calculate rotation needed
+        const rotation = (targetInIndex - defaultInIndex + 4) % 4 * 90
+        
+        result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rotation })
       } else {
         const rot = getDirectionRotation(d.x, d.y)
         result.push({ x: cell.x, y: cell.y, type: 'belt', rotate: rot })
@@ -401,6 +414,7 @@ function App() {
           }
         } else {
           setBeltEndPos({ x, y })
+          setPreviewPosition({ x, y })
           const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
           stage.container().style.cursor = path ? 'default' : 'not-allowed'
         }

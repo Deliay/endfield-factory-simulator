@@ -144,22 +144,22 @@ describe('Belt placement from storage_box to (3,2)', () => {
     const pieces = computeBeltPathPieces(path, 'N', undefined)
     expect(pieces).toHaveLength(3)
 
-    // (2,3): belt_corner_ne with OWN and INE
+    // (2,3): belt_corner_ne with INN and OEE
     expect(pieces[0]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 })
     const nwDef = machineRegistry.get(BeltCornerNeConfig.type)
     expect(nwDef?.ports.find(p => p.port === 'IN')?.direction).toBe('N')
     expect(nwDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
 
-    // (3,3): belt_corner_en rotated 0 degrees (ONN IEE) - code generates this
-    expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 0 })
-    const wnDef33 = machineRegistry.get(BeltCornerEnConfig.type)
-    expect(wnDef33?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
-    expect(wnDef33?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
+    // (3,3): belt_corner_ne rotated 270 degrees (INW and OEN)
+    expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 270 })
+    const neDef33 = machineRegistry.get(BeltCornerNeConfig.type)
+    expect(neDef33?.ports.find(p => p.port === 'IN')?.direction).toBe('N')
+    expect(neDef33?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
 
-    // (3,2): belt_corner_en rotated 0 degrees (ONN IEE) - code generates this
-    expect(pieces[2]).toEqual({ x: 3, y: 2, type: BeltCornerEnConfig.type, rotate: 0 })
-    const wnDef32 = machineRegistry.get(BeltCornerEnConfig.type)
-    expect(wnDef32?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
-    expect(wnDef32?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
+    // (3,2): regular belt rotated 270 degrees (IWS and OEN)
+    expect(pieces[2]).toEqual({ x: 3, y: 2, type: 'belt', rotate: 270 })
+    const beltDef = machineRegistry.get('belt')
+    expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
+    expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
   })
 })

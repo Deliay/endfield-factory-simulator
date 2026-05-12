@@ -28,8 +28,8 @@ describe('Belt path computation with storage_box', () => {
 
       expect(pieces).toEqual([
         { x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 },
-        { x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 0 },
-        { x: 3, y: 2, type: BeltCornerEnConfig.type, rotate: 0 }
+        { x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 270 },
+        { x: 3, y: 2, type: 'belt', rotate: 270 }
       ])
     })
   })
@@ -47,8 +47,8 @@ describe('Belt path computation with storage_box', () => {
 
       expect(pieces).toEqual([
         { x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 },
-        { x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 0 },
-        { x: 3, y: 2, type: BeltCornerEnConfig.type, rotate: 0 }
+        { x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 270 },
+        { x: 3, y: 2, type: 'belt', rotate: 270 }
       ])
     })
   })
@@ -70,18 +70,18 @@ describe('Belt path computation with storage_box', () => {
       const secondPiece = pieces[1]
       expect(secondPiece.x).toBe(3)
       expect(secondPiece.y).toBe(3)
-      expect(secondPiece.type).toBe(BeltCornerEnConfig.type)
-      expect(secondPiece.rotate).toBe(0)
+      expect(secondPiece.type).toBe(BeltCornerNeConfig.type)
+      expect(secondPiece.rotate).toBe(270)
     })
 
-    it('third piece at (3,2) should be belt_corner_en rotated 0', () => {
+    it('third piece at (3,2) should be regular belt rotated 270', () => {
       const path = findPath(2, 3, 3, 2, [storageBox], false)!
       const pieces = computeBeltPathPieces(path, 'N', undefined)
       const thirdPiece = pieces[2]
       expect(thirdPiece.x).toBe(3)
       expect(thirdPiece.y).toBe(2)
-      expect(thirdPiece.type).toBe(BeltCornerEnConfig.type)
-      expect(thirdPiece.rotate).toBe(0)
+      expect(thirdPiece.type).toBe('belt')
+      expect(thirdPiece.rotate).toBe(270)
     })
   })
 })
