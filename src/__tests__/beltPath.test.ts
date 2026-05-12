@@ -27,7 +27,7 @@ describe('Belt path computation with storage_box', () => {
       const pieces = computeBeltPathPieces(path, 'N', undefined)
 
       expect(pieces).toEqual([
-        { x: 2, y: 3, type: 'belt', rotate: 270 },
+        { x: 2, y: 3, type: 'belt_corner_wn', rotate: 90 },
         { x: 3, y: 3, type: 'belt_corner_nw', rotate: 90 },
         { x: 3, y: 2, type: 'belt', rotate: 270 }
       ])
@@ -54,14 +54,14 @@ describe('Belt path computation with storage_box', () => {
   })
 
   describe('Path verification details', () => {
-    it('first piece at (2,3) should be belt going N when no existing belt', () => {
+    it('first piece at (2,3) should be corner belt turning from N to E', () => {
       const path = findPath(2, 3, 3, 2, [storageBox], false)!
       const pieces = computeBeltPathPieces(path, 'N', undefined)
       const firstPiece = pieces[0]
       expect(firstPiece.x).toBe(2)
       expect(firstPiece.y).toBe(3)
-      expect(firstPiece.type).toBe('belt')
-      expect(firstPiece.rotate).toBe(270)
+      expect(firstPiece.type).toBe('belt_corner_wn')
+      expect(firstPiece.rotate).toBe(90)
     })
 
     it('second piece at (3,3) should be corner turning from E to N', () => {

@@ -219,7 +219,7 @@ export function computeBeltPathPieces(
           })()
         : startDir
 
-      if (existingAtStart && firstDir !== startDir) {
+      if (firstDir !== startDir) {
         const corner = getCornerTypeAndRotation(startDir, firstDir)
         if (corner) {
           result.push({ x: cell.x, y: cell.y, type: corner.type, rotate: corner.rotate })
