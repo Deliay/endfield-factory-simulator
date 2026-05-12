@@ -194,8 +194,8 @@ const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(nu
 - `beltEndPos`: 鼠标当前指向的终点cell (用于路径预览)
 
 ### 起点确定 (第一次点击)
-1. 如果点击的cell已有belt/belt_corner → 取其OUT方向作为 `beltStartDir`
-2. 如果点击的cell在机器内部 → 找到离点击位置最近的可用OUT port
+1. 如果点击的cell已有belt/belt_corner → 可以改变点击的cell的belt形状
+2. 如果点击的cell在机器内部 → 找到离点击位置最近的可用OUT port，注意这里机器的out port方位始终和起始点传送带的in方位对应
 3. 否则搜索四方向(N/S/E/W)相邻机器的OUT port，优先级：南 > 东 > 北 > 西
 4. 如果无相邻OUT port → 禁止放置
 
@@ -210,6 +210,37 @@ const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(nu
 3. 路径上每个cell: 直线段放belt，弯折处放belt_corner
 4. 放置后，终点变为新起点，`beltStartDir` 为路径最后一段方向
 5. 可继续点击下一个终点，实现连续放置
+
+### 放置测试用例
+假定storage_box在 (1,1)放置且不旋转，左上角为(1,1)，右下角为(3,3)，即(3,3)-南为out port.
+
+CASE1: 点击(3,3)作为起始点，起始点会自动计算为(3,4)
+CASE2: 点击(3,4)作为起始点，结束点选为(4,3)，会产生3个点
+
+- (3,4): belt_corner_ne, 不旋转
+- (4,4): belt_corner_ne, 旋转270
+- (4,3): belt, 旋转270
+
+CASE3: 点击(3,4)作为起始点，结束点选为(4,5)，会产生3个点
+
+- (3,4): belt_corner_ne, 不旋转
+- (4,4): belt_corner_en, 旋转180
+- (4,5): belt, 旋转90
+
+CASE4: 点击(3,4)作为起始点，结束点选为(2,5)，会产生3个点
+
+- (3,4): belt_corner_en, 旋转270
+- (2,4): belt_corner_ne, 旋转90
+- (2,5): belt, 旋转90
+
+CASE5: 点击(3,4)作为起始点，结束点选为(0,2)，会产生6个点
+
+- (3,4): belt_corner_en, 旋转270
+- (2,4): belt, 旋转180
+- (1,4): belt, 旋转180
+- (0,4): belt_corner_en, 不旋转
+- (0,3): belt, 旋转270
+- (0,2): belt, 旋转270
 
 ### findAdjacentOutPort
 ```typescript

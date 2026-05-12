@@ -104,8 +104,8 @@ describe('Belt path computation with storage_box', () => {
       // First piece at (2,3): corner_ne, INN,OEE, no rotation (rotate 0)
       expect(pieces[0]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 })
       
-      // Second piece at (3,3): corner turning from east to south (belt_corner_ne rotate 90)
-      expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerNeConfig.type, rotate: 90 })
+      // Second piece at (3,3): corner_en, IEW,ONS, rotation 180
+      expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 180 })
       
       // Third piece at (3,4): regular belt, IWN,OES, rotation 90
       expect(pieces[2]).toEqual({ x: 3, y: 4, type: 'belt', rotate: 90 })
@@ -157,9 +157,8 @@ describe('Belt path computation with storage_box', () => {
       // Second piece at (1,3): regular belt going east (rotate 0)
       expect(pieces[1]).toEqual({ x: 1, y: 3, type: 'belt', rotate: 0 })
       
-      // Third piece at (2,3): corner turning from east to south (belt_corner_ne rotate 90)
-      // 根据图像，拐角应该从东转向南，使用 belt_corner_ne 旋转 90 度
-      expect(pieces[2]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 90 })
+      // Third piece at (2,3): corner_en, IEW,ONS, rotation 180
+      expect(pieces[2]).toEqual({ x: 2, y: 3, type: BeltCornerEnConfig.type, rotate: 180 })
       
       // Fourth piece at (2,4): regular belt going south (rotate 90)
       expect(pieces[3]).toEqual({ x: 2, y: 4, type: 'belt', rotate: 90 })
