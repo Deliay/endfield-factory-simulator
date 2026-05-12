@@ -163,6 +163,38 @@ const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(nu
 const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<...> | null>(null)
 ```
 
+### findAdjacentInPort
+```typescript
+function findAdjacentInPort(
+  clickX: number, clickY: number,
+  existing: PlacedMachine[],
+  priority: Dir[],
+): { x: number; y: number } | null
+```
+- 搜索点击位置附近的机器 IN port，返回吸附后的传送带终点坐标
+- **点击在机器内部时**：计算该机器的所有 IN port，返回曼哈顿距离最近的 IN port 的 feeding cell
+- **点击在机器外部时**：按 priority 顺序检查相邻 4 个方向，若某个相邻 cell 属于机器且有 IN port 位于该 cell，返回该 IN port 的 feeding cell
+- feeding cell 计算：`portGlobal + DIR_DX[rotatedDir]`（IN port 朝向方向向外一步，即传送带送达物品的位置）
+- priority 默认 `['S', 'E', 'N', 'W']`，与 `findAdjacentOutPort` 保持一致
+- 使用 `rotatePortPosition` 正确处理旋转后机器的 port 位置
+
+### 使用场景
+- **BELT_PLACE dispatch 前**：`handleClick` 中第二次点击（确定终点）时调用，若找到 IN port 则替换终点坐标
+- **预览**：`handleMouseMove` 中同理，预览路径吸附到 feeding cell
+
+### findEndInPortDir
+```typescript
+function findEndInPortDir(
+  endX: number, endY: number,
+  existing: PlacedMachine[],
+): Dir | null
+```
+- 只在 `computeBeltPathPieces` 内部调用，用于终点 piece 的 IN port 吸附
+- 按优先级 `['S', 'E', 'N', 'W']` 检查终点 cell 的相邻方向
+- 若某个相邻 cell 属于机器且有 IN port 位于该 cell，且 feeding cell 等于终点位置
+- 返回 `OPPOSITE[rotatedDir]`（传送带出口方向，即物品流向机器 IN port 的方向）
+- 若找到，终点 piece 会被计算为弯角（entry=路径方向，exit=IN port 出口方向），而不是直线 belt
+
 ## 核心函数
 
 ### getMachineCells
@@ -240,6 +272,7 @@ function computeBeltPathPieces(
   path: { x: number; y: number }[],
   startDir: Dir,
   existingAtStart: PlacedMachine | undefined,
+  existing?: PlacedMachine[],
 ): Array<{ x: number; y: number; type: string; rotate: number }>
 ```
 - 遍历路径，计算每个 cell 的 belt 类型和旋转
@@ -247,7 +280,8 @@ function computeBeltPathPieces(
   1. 起点已有 belt → 如果 direction 不变则保留，否则替换为 corner
   2. 直线段 (entry == opposite(exit)) → belt
   3. 弯折处 → getCornerTypeAndRotation 确定类型和旋转
-  4. 终点 → exitDir = opposite(entryDir)，旋转由 exitDir 决定
+  4. 终点 → 若提供了 `existing`，优先检查 `findEndInPortDir` 获取出口方向，否则用 `exitDir = opposite(entryDir)`
+  5. 终点若检测到 IN port，变为弯角（entry=路径方向，exit=IN port 出口方向），而不是直线 belt
 
 ## 传送带放置流程
 
@@ -322,6 +356,12 @@ CASE7.2: 起点(4,4) dir=W (上一次的结束方向), 终点(4,3)
 - computeBeltPathPieces 检查: startDir=W, exitDir=N → 弯折 → belt_corner_ne@270
 - (4,4): belt_corner_ne@270 (替换原来的 belt@0)
 - (4,3): belt@270
+
+CASE8: 搜索机器IN接口
+- 放置传送带，起点(3,4)，终点(4, 0)，此时(4, 0)应该是belt@270
+- 从(4,0)开始连续放置，终点(3,0)，此时 (4,0)应该变为belt_corner_ne@180 (S→W 顺时针1步)
+- 终点(3,0)因为附近有IN port (3, 1)，`findEndInPortDir` 检测到出口方向应为 S（IN port 方向 N → 传送带出口方向 OPPOSITE[N]=S），变为 belt_corner_ne@90 (E→S 顺时针1步)
+
 
 ## 方向与旋转对照
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findAdjacentOutPort, findPath, computeBeltPathPieces } from '../App'
+import { findAdjacentOutPort, findAdjacentInPort, findPath, computeBeltPathPieces } from '../App'
 import type { PlacedMachine } from '../types/Factory'
 import '../machines/storage_box'
 import { BeltCornerNeConfig } from '../machines/belt'
@@ -161,5 +161,97 @@ describe('Belt placement from storage_box to (3,2)', () => {
     const beltDef = machineRegistry.get('belt')
     expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
     expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
+  })
+})
+
+describe('findAdjacentInPort', () => {
+  describe('storage_box (3x3) at (1,1) no rotation', () => {
+    const machine = createPlacedMachine('storage_box', 1, 1, 0)
+    // storage_box IN ports at (1,1)N→(1,0), (2,1)N→(2,0), (3,1)N→(3,0)
+
+    it('should snap to feeding cell when clicking on a machine cell', () => {
+      const result = findAdjacentInPort(2, 1, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 2, y: 0 })
+    })
+
+    it('should snap to IN port feeding cell when clicking on feeding cell itself', () => {
+      const result = findAdjacentInPort(2, 0, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 2, y: 0 })
+    })
+
+    it('should snap to the closest IN port when clicking inside machine', () => {
+      const result = findAdjacentInPort(2, 2, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 2, y: 0 })
+    })
+
+    it('should use priority when clicking adjacent to machines on multiple sides', () => {
+      const result = findAdjacentInPort(2, -1, [machine], ['S', 'E', 'N', 'W'])
+      // S of (2,-1) = (2,0) which is not a machine cell
+      // E of (2,-1) = (3,-1) not a machine cell
+      // N of (2,-1) = (2,-2) not a machine cell
+      // W of (2,-1) = (1,-1) not a machine cell
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('storage_box (3x3) rotated 90 degrees', () => {
+    const machine = createPlacedMachine('storage_box', 1, 1, 90)
+    // storage_box rotated 90: IN ports rotate to East side
+    // Original IN at (0,0)N → rotated 90: (2,0)E → global (3,1)E → feeding (4,1)
+    // Original IN at (1,0)N → rotated 90: (2,1)E → global (3,2)E → feeding (4,2)
+    // Original IN at (2,0)N → rotated 90: (2,2)E → global (3,3)E → feeding (4,3)
+
+    it('should find IN port on the east side when rotated 90', () => {
+      const result = findAdjacentInPort(4, 2, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 4, y: 2 })
+    })
+
+    it('should snap to feeding cell when clicking machine cell', () => {
+      const result = findAdjacentInPort(3, 2, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 4, y: 2 })
+    })
+  })
+
+  describe('storage_box (3x3) rotated 180 degrees', () => {
+    const machine = createPlacedMachine('storage_box', 1, 1, 180)
+    // Original IN at (0,0)N → rotated 180: (2,2)S → global (3,3)S → feeding (3,4)
+    // Original IN at (1,0)N → rotated 180: (1,2)S → global (2,3)S → feeding (2,4)
+    // Original IN at (2,0)N → rotated 180: (0,2)S → global (1,3)S → feeding (1,4)
+
+    it('should find IN port on the south side when rotated 180', () => {
+      const result = findAdjacentInPort(2, 4, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 2, y: 4 })
+    })
+
+    it('should snap to feeding cell when clicking inside machine', () => {
+      const result = findAdjacentInPort(2, 3, [machine], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 2, y: 4 })
+    })
+  })
+
+  describe('no adjacent IN port', () => {
+    const machine = createPlacedMachine('storage_box', 0, 0, 0)
+
+    it('should return null when no IN port nearby', () => {
+      expect(findAdjacentInPort(10, 10, [machine], ['S', 'E', 'N', 'W'])).toBeNull()
+    })
+  })
+
+  describe('priority order with multiple machines', () => {
+    // Two storage_boxes: one at (5,5), one at (7,5)
+    // Box at (5,5): IN ports at north edge → feeding cells at y=4
+    // Box at (7,5): IN ports at north edge → feeding cells at y=4
+    // Clicking at (6,4): adjacent S = (6,5) is the first box? No, (6,5) is inside box at (5,5) since box occupies (5,5)-(7,7)
+    // Actually box at (5,5) occupies (5,5)-(7,7), so (6,5) is inside it
+    // The box at (7,5) occupies (7,5)-(9,7)
+    const box1 = createPlacedMachine('storage_box', 5, 5, 0)
+    const box2 = createPlacedMachine('storage_box', 8, 5, 0)
+
+    it('should find the first IN port in priority order', () => {
+      // Click at (6,4): check (6,4) itself → not inside any machine
+      // Priority S: (6,5) → inside box1, IN port, return
+      const result = findAdjacentInPort(6, 4, [box1, box2], ['S', 'E', 'N', 'W'])
+      expect(result).toEqual({ x: 6, y: 4 })
+    })
   })
 })

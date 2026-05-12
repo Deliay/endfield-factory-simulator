@@ -6,7 +6,7 @@ import { machineRegistry } from './types/Machine'
 import type { Factory, PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
-import { rotateDir, type Dir } from './utils/rotation'
+import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
 import './machines/belt'
 import './machines/storage_box'
 
@@ -113,6 +113,59 @@ export function findAdjacentOutPort(
             return { dir: DIR_OPPOSITE[rotatedDir] }
           }
         }
+      }
+    }
+  }
+  return null
+}
+
+export function findAdjacentInPort(
+  clickX: number, clickY: number,
+  existing: PlacedMachine[],
+  priority: Dir[],
+): { x: number; y: number } | null {
+  // Check if clicked cell is inside a machine → find closest IN port by Manhattan distance
+  let best: { x: number; y: number; dist: number } | null = null
+  for (const pm of existing) {
+    if (!getMachineCells(pm).some(c => c.x === clickX && c.y === clickY)) continue
+    const def = machineRegistry.get(pm.type)
+    if (!def) continue
+    for (const port of def.ports) {
+      if (port.port !== 'IN') continue
+      const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, pm.rotate)
+      const portGlobalX = pm.x + rotatedPos.x
+      const portGlobalY = pm.y + rotatedPos.y
+      const rotatedDir = rotateDir(port.direction, pm.rotate)
+      const feedingX = portGlobalX + DIR_DX[rotatedDir]
+      const feedingY = portGlobalY + DIR_DY[rotatedDir]
+      if (feedingX < 0 || feedingX >= GRID_COLS || feedingY < 0 || feedingY >= GRID_ROWS) continue
+      const dist = Math.abs(clickX - portGlobalX) + Math.abs(clickY - portGlobalY)
+      if (!best || dist < best.dist) {
+        best = { x: feedingX, y: feedingY, dist }
+      }
+    }
+    if (best) return { x: best.x, y: best.y }
+  }
+
+  // Check adjacent cells in priority order
+  for (const dir of priority) {
+    const adjX = clickX + DIR_DX[dir]
+    const adjY = clickY + DIR_DY[dir]
+    for (const pm of existing) {
+      if (!getMachineCells(pm).some(c => c.x === adjX && c.y === adjY)) continue
+      const def = machineRegistry.get(pm.type)
+      if (!def) continue
+      for (const port of def.ports) {
+        if (port.port !== 'IN') continue
+        const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, pm.rotate)
+        const portGlobalX = pm.x + rotatedPos.x
+        const portGlobalY = pm.y + rotatedPos.y
+        if (portGlobalX !== adjX || portGlobalY !== adjY) continue
+        const rotatedDir = rotateDir(port.direction, pm.rotate)
+        const feedingX = portGlobalX + DIR_DX[rotatedDir]
+        const feedingY = portGlobalY + DIR_DY[rotatedDir]
+        if (feedingX < 0 || feedingX >= GRID_COLS || feedingY < 0 || feedingY >= GRID_ROWS) continue
+        return { x: feedingX, y: feedingY }
       }
     }
   }
@@ -260,10 +313,41 @@ function getBeltRotation(dir: Dir): number {
   return dirRotation[dir]
 }
 
+function findEndInPortDir(
+  endX: number, endY: number,
+  existing: PlacedMachine[],
+): Dir | null {
+  const priority: Dir[] = ['S', 'E', 'N', 'W']
+  for (const dir of priority) {
+    const adjX = endX + DIR_DX[dir]
+    const adjY = endY + DIR_DY[dir]
+    for (const pm of existing) {
+      if (!getMachineCells(pm).some(c => c.x === adjX && c.y === adjY)) continue
+      const def = machineRegistry.get(pm.type)
+      if (!def) continue
+      for (const port of def.ports) {
+        if (port.port !== 'IN') continue
+        const rotatedPos = rotatePortPosition(port.x, port.y, def.width, def.height, pm.rotate)
+        const portGlobalX = pm.x + rotatedPos.x
+        const portGlobalY = pm.y + rotatedPos.y
+        if (portGlobalX !== adjX || portGlobalY !== adjY) continue
+        const rotatedDir = rotateDir(port.direction, pm.rotate)
+        const feedingX = portGlobalX + DIR_DX[rotatedDir]
+        const feedingY = portGlobalY + DIR_DY[rotatedDir]
+        if (feedingX === endX && feedingY === endY) {
+          return DIR_OPPOSITE[rotatedDir]
+        }
+      }
+    }
+  }
+  return null
+}
+
 export function computeBeltPathPieces(
   path: { x: number; y: number }[],
   startDir: Dir,
   existingAtStart: PlacedMachine | undefined,
+  existing?: PlacedMachine[],
 ): Array<{ x: number; y: number; type: string; rotate: number }> {
   if (path.length === 0) return []
   if (path.length === 1) {
@@ -299,7 +383,12 @@ export function computeBeltPathPieces(
 
     let exitDir: Dir
     if (isEnd) {
-      exitDir = OPPOSITE[currentDir]
+      if (existing) {
+        const inPortDir = findEndInPortDir(curr.x, curr.y, existing)
+        exitDir = inPortDir ?? OPPOSITE[currentDir]
+      } else {
+        exitDir = OPPOSITE[currentDir]
+      }
     } else {
       const next = path[i + 1]
       exitDir = curr.x === next.x ? (curr.y < next.y ? 'S' : 'N') : (curr.x < next.x ? 'E' : 'W')
@@ -344,7 +433,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       if (!path) return state
       const startPos = path[0]
       const existingAtStart = state.machines.find(m => m.x === startPos.x && m.y === startPos.y)
-      const pieces = computeBeltPathPieces(path, d, existingAtStart)
+      const pieces = computeBeltPathPieces(path, d, existingAtStart, state.machines)
       const machines = [
         ...state.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
         ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
@@ -454,10 +543,13 @@ function App() {
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
       if (placingMachine === 'belt' && state.beltStartPos) {
-        setBeltEndPos({ x, y })
-        const path = findPath(state.beltStartPos.x, state.beltStartPos.y, x, y, state.machines, true)
+        const snap = findAdjacentInPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
+        const endX = snap ? snap.x : x
+        const endY = snap ? snap.y : y
+        setBeltEndPos({ x: endX, y: endY })
+        const path = findPath(state.beltStartPos.x, state.beltStartPos.y, endX, endY, state.machines, true)
         if (path) {
-          const pieces = computeBeltPathPieces(path, state.beltStartDir!, undefined)
+          const pieces = computeBeltPathPieces(path, state.beltStartDir!, undefined, state.machines)
           setBeltPreviewPieces(pieces)
         } else {
           setBeltPreviewPieces(null)
@@ -498,7 +590,8 @@ function App() {
           }
         }
       } else {
-        dispatch({ type: 'BELT_PLACE', x, y })
+        const snap = findAdjacentInPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
+        dispatch({ type: 'BELT_PLACE', x: snap ? snap.x : x, y: snap ? snap.y : y })
       }
       return
     }
