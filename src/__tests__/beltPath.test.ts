@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { findPath, computeBeltPathPieces } from '../App'
 import type { PlacedMachine } from '../types/Factory'
+import { machineRegistry } from '../types/Machine'
 import '../machines/storage_box'
 import { BeltCornerNeConfig, BeltCornerEnConfig } from '../machines/belt'
 
@@ -82,6 +83,55 @@ describe('Belt path computation with storage_box', () => {
       expect(thirdPiece.y).toBe(2)
       expect(thirdPiece.type).toBe('belt')
       expect(thirdPiece.rotate).toBe(270)
+    })
+  })
+
+  describe('Path from storage_box OUT port to (3,4)', () => {
+    it('should compute correct belt pieces for path to (3,4)', () => {
+      // Path from (2,3) to (3,4) should be: (2,3) -> (3,3) -> (3,4)
+      // Start direction is north (when clicking at (2,3) to place belt)
+      const path = [
+        { x: 2, y: 3 },
+        { x: 3, y: 3 },
+        { x: 3, y: 4 }
+      ]
+      
+      // Start direction is north
+      const pieces = computeBeltPathPieces(path, 'N', undefined)
+      
+      expect(pieces).toHaveLength(3)
+      
+      // First piece at (2,3): corner_ne, INN,OEE, no rotation (rotate 0)
+      expect(pieces[0]).toEqual({ x: 2, y: 3, type: BeltCornerNeConfig.type, rotate: 0 })
+      
+      // Second piece at (3,3): corner_en, IEW,ONS, rotation 180
+      expect(pieces[1]).toEqual({ x: 3, y: 3, type: BeltCornerEnConfig.type, rotate: 180 })
+      
+      // Third piece at (3,4): regular belt, IWN,OES, rotation 90
+      expect(pieces[2]).toEqual({ x: 3, y: 4, type: 'belt', rotate: 90 })
+    })
+
+    it('verify port directions for path to (3,4)', () => {
+      // Note: We don't use computeBeltPathPieces here, we're testing machine definitions
+      
+      // First piece at (2,3): corner_ne (IN North, OUT East)
+      const neDef = machineRegistry.get(BeltCornerNeConfig.type)
+      expect(neDef?.ports.find(p => p.port === 'IN')?.direction).toBe('N')
+      expect(neDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
+      
+      // Second piece at (3,3): corner_en rotated 180 degrees
+      // Default corner_en: IN East, OUT North
+      // Rotated 180: IN West, OUT South
+      const enDef = machineRegistry.get(BeltCornerEnConfig.type)
+      expect(enDef?.ports.find(p => p.port === 'IN')?.direction).toBe('E')
+      expect(enDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('N')
+      
+      // Third piece at (3,4): regular belt rotated 90 degrees
+      // Default belt: IN West, OUT East
+      // Rotated 90: IN North, OUT South
+      const beltDef = machineRegistry.get('belt')
+      expect(beltDef?.ports.find(p => p.port === 'IN')?.direction).toBe('W')
+      expect(beltDef?.ports.find(p => p.port === 'OUT')?.direction).toBe('E')
     })
   })
 })

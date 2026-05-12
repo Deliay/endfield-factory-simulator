@@ -196,7 +196,7 @@ function getCornerTypeAndRotation(curDir: Dir, nextDir: Dir): { type: string; ro
   // Direct mapping based on path direction and image labels
   const lookup: Record<string, { type: string; rotate: number }> = {
     'N→E': { type: 'belt_corner_ne', rotate: 0 },  // INN OEE at (2,3)
-    'E→S': { type: 'belt_corner_ne', rotate: 270 }, // OEN INW at (3,3)
+    'E→S': { type: 'belt_corner_en', rotate: 180 }, // IEW ONS at (3,3)
     'S→W': { type: 'belt_corner_ne', rotate: 180 },
     'W→N': { type: 'belt_corner_ne', rotate: 90 },
     'E→N': { type: 'belt_corner_ne', rotate: 270 }, // INW OEN at (3,3) - changed from belt_corner_en
