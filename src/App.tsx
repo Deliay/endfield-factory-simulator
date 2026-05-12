@@ -334,6 +334,10 @@ function App() {
   const [beltStartDir, setBeltStartDir] = useState<Dir | null>(null)
   const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
   const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
+  const beltStartPosRef = useRef(beltStartPos)
+  const beltStartDirRef = useRef(beltStartDir)
+  useEffect(() => { beltStartPosRef.current = beltStartPos }, [beltStartPos])
+  useEffect(() => { beltStartDirRef.current = beltStartDir }, [beltStartDir])
 
   const allMachines = machineRegistry.getAll()
 
@@ -409,11 +413,11 @@ function App() {
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
-      if (placingMachine === 'belt' && beltStartPos) {
+      if (placingMachine === 'belt' && beltStartPosRef.current) {
         setBeltEndPos({ x, y })
-        const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
+        const path = findPath(beltStartPosRef.current.x, beltStartPosRef.current.y, x, y, factory.machines, true)
         if (path) {
-          const pieces = computeBeltPathPieces(path, beltStartDir!, undefined)
+          const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, undefined)
           setBeltPreviewPieces(pieces)
         } else {
           setBeltPreviewPieces(null)
@@ -433,7 +437,7 @@ function App() {
       const x = previewPosition.x
       const y = previewPosition.y
 
-      if (!beltStartPos) {
+      if (!beltStartPosRef.current) {
         const existingBelt = factory.machines.find(
           m => m.x === x && m.y === y && (m.type === 'belt' || m.type.startsWith('belt_corner'))
         )
@@ -457,16 +461,17 @@ function App() {
           }
         }
       } else {
-        const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
+        const path = findPath(beltStartPosRef.current.x, beltStartPosRef.current.y, x, y, factory.machines, true)
         if (path) {
+          const startPos = path[0]
           const existingAtStart = factory.machines.find(
-            m => m.x === beltStartPos!.x && m.y === beltStartPos!.y
+            m => m.x === startPos.x && m.y === startPos.y
           )
-          const pieces = computeBeltPathPieces(path, beltStartDir!, existingAtStart)
+          const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, existingAtStart)
           setFactory(prev => ({
             ...prev,
             machines: [
-              ...prev.machines.filter(m => !(m.x === beltStartPos!.x && m.y === beltStartPos!.y)),
+              ...prev.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
               ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
             ],
           }))
