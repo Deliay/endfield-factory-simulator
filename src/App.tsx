@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, react-refresh/only-export-components */
 import { useState, useEffect, useReducer, useRef } from 'react'
-import { Stage, Layer, Line, Rect } from 'react-konva'
+import { Stage, Layer, Line, Rect, Text } from 'react-konva'
 import type { Stage as StageType } from 'konva/lib/Stage'
 import { machineRegistry } from './types/Machine'
 import type { Factory, PlacedMachine } from './types/Factory'
@@ -767,7 +767,7 @@ function App() {
         y={y}
         rotation={placedMachine.rotate}
         cellSize={CELL_SIZE}
-        showPortLabels={true}
+        showPortLabels={false}
       />
     )
   })
@@ -815,18 +815,33 @@ function App() {
     const itemId = beltItems.get(cellKey)
     if (!itemId) return null
     return (
-      <Rect
-        key={`belt-item-${idx}`}
-        x={offsetX + m.x * CELL_SIZE + CELL_SIZE / 4}
-        y={offsetY + m.y * CELL_SIZE + CELL_SIZE / 4}
-        width={CELL_SIZE / 2}
-        height={CELL_SIZE / 2}
-        fill="#ffcc00"
-        cornerRadius={4}
-        shadowColor="black"
-        shadowBlur={4}
-        shadowOpacity={0.5}
-      />
+      <>
+        <Rect
+          key={`belt-item-bg-${idx}`}
+          x={offsetX + m.x * CELL_SIZE + CELL_SIZE / 4}
+          y={offsetY + m.y * CELL_SIZE + CELL_SIZE / 4}
+          width={CELL_SIZE / 2}
+          height={CELL_SIZE / 2}
+          fill="#ffcc00"
+          cornerRadius={4}
+          shadowColor="black"
+          shadowBlur={4}
+          shadowOpacity={0.5}
+        />
+        <Text
+          key={`belt-item-${idx}`}
+          x={offsetX + m.x * CELL_SIZE}
+          y={offsetY + m.y * CELL_SIZE}
+          width={CELL_SIZE}
+          height={CELL_SIZE}
+          text={itemId}
+          fontSize={11}
+          fontStyle="bold"
+          fill="#000"
+          align="center"
+          verticalAlign="middle"
+        />
+      </>
     )
   })
 
