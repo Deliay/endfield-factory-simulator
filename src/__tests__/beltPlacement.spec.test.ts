@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findPath, computeBeltPathPieces } from '../App'
+import { findPath, computeBeltPathPieces, findMachineOutPort } from '../App'
 import type { PlacedMachine } from '../types/Factory'
 import '../machines/storage_box'
 import '../machines/belt'
@@ -15,9 +15,18 @@ describe('Belt placement cases from SPEC.md', () => {
 
   describe('CASE1: 点击(3,3)作为起始点', () => {
     it('起始点会自动计算为(3,4)', () => {
-      // (3,3) is OUT port of storage_box, adjacent cell to south is (3,4)
-      const result = findPath(3, 4, 3, 4, [storageBox], false)
-      expect(result).toEqual([{ x: 3, y: 4 }])
+      const result = findMachineOutPort(3, 3, [storageBox])
+      expect(result).toEqual({ outX: 3, outY: 4, dir: 'N' })
+    })
+
+    it('点击(3,2)也应返回最近的OUT port', () => {
+      const result = findMachineOutPort(3, 2, [storageBox])
+      expect(result).toEqual({ outX: 3, outY: 4, dir: 'N' })
+    })
+
+    it('点击(2,2)应返回最近的OUT port', () => {
+      const result = findMachineOutPort(2, 2, [storageBox])
+      expect(result).toEqual({ outX: 2, outY: 4, dir: 'N' })
     })
   })
 

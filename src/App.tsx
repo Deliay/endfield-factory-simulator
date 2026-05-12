@@ -119,6 +119,35 @@ export function findAdjacentOutPort(
   return null
 }
 
+export function findMachineOutPort(
+  clickX: number, clickY: number,
+  existing: PlacedMachine[],
+): { outX: number; outY: number; dir: Dir } | null {
+  for (const pm of existing) {
+    const def = machineRegistry.get(pm.type)
+    if (!def) continue
+    const cells = getMachineCells(pm)
+    const clickedInside = cells.some(c => c.x === clickX && c.y === clickY)
+    if (!clickedInside) continue
+
+    let best: { outX: number; outY: number; dir: Dir; dist: number } | null = null
+    for (const port of def.ports) {
+      if (port.port !== 'OUT') continue
+      const rotatedDir = rotateDir(port.direction, pm.rotate)
+      const portGlobalX = pm.x + port.x
+      const portGlobalY = pm.y + port.y
+      const beltX = portGlobalX + DIR_DX[rotatedDir]
+      const beltY = portGlobalY + DIR_DY[rotatedDir]
+      const dist = Math.abs(clickX - portGlobalX) + Math.abs(clickY - portGlobalY)
+      if (!best || dist < best.dist) {
+        best = { outX: beltX, outY: beltY, dir: DIR_OPPOSITE[rotatedDir], dist }
+      }
+    }
+    if (best) return { outX: best.outX, outY: best.outY, dir: best.dir }
+  }
+  return null
+}
+
 function isCellOccupied(x: number, y: number, existing: PlacedMachine[], excludeStartX?: number, excludeStartY?: number): boolean {
   for (const pm of existing) {
     if (pm.x === excludeStartX && pm.y === excludeStartY) continue
@@ -405,24 +434,49 @@ function App() {
       const y = previewPosition.y
 
       if (!beltStartPos) {
-        const result = findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
-        if (result) {
+        const existingBelt = factory.machines.find(
+          m => m.x === x && m.y === y && (m.type === 'belt' || m.type.startsWith('belt_corner'))
+        )
+        if (existingBelt) {
+          const def = machineRegistry.get(existingBelt.type)
+          const inPort = def?.ports.find(p => p.port === 'IN')
+          const entryDir = inPort ? rotateDir(inPort.direction, existingBelt.rotate) : 'N'
           setBeltStartPos({ x, y })
-          setBeltStartDir(result.dir)
+          setBeltStartDir(entryDir)
+        } else {
+          const machinePort = findMachineOutPort(x, y, factory.machines)
+          if (machinePort) {
+            setBeltStartPos({ x: machinePort.outX, y: machinePort.outY })
+            setBeltStartDir(machinePort.dir)
+          } else {
+            const result = findAdjacentOutPort(x, y, factory.machines, ['S', 'E', 'N', 'W'])
+            if (result) {
+              setBeltStartPos({ x, y })
+              setBeltStartDir(result.dir)
+            }
+          }
         }
       } else {
         const path = findPath(beltStartPos.x, beltStartPos.y, x, y, factory.machines, true)
         if (path) {
-          const pieces = computeBeltPathPieces(path, beltStartDir!, undefined)
+          const existingAtStart = factory.machines.find(
+            m => m.x === beltStartPos!.x && m.y === beltStartPos!.y
+          )
+          const pieces = computeBeltPathPieces(path, beltStartDir!, existingAtStart)
           setFactory(prev => ({
             ...prev,
             machines: [
-              ...prev.machines,
+              ...prev.machines.filter(m => !(m.x === beltStartPos!.x && m.y === beltStartPos!.y)),
               ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
             ],
           }))
+          const last = path[path.length - 1]
+          const prev2 = path[path.length - 2]
+          const lastDir: Dir = prev2.x === last.x
+            ? (prev2.y < last.y ? 'S' : 'N')
+            : (prev2.x < last.x ? 'E' : 'W')
           setBeltStartPos({ x, y })
-          setBeltStartDir(beltStartDir!)
+          setBeltStartDir(OPPOSITE[lastDir])
         }
       }
       return
