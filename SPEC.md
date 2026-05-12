@@ -426,6 +426,122 @@ const offsetY = (dimensions.height - gridHeight) / 2
 - Escape: 取消放置，清除起点
 - R: 旋转当前放置的机器 90°
 
+## 工厂模拟
+
+工厂模拟系统FactoryEmulator，这个系统会处理所有的machine: PlacedMachine的运作
+
+0. Machine的定义增加如下字段
+
+- inventoryCapacity: 传送带为1， storage_box为6
+- ItemStack: { id: string, amount: number }
+
+1. PlacedMachine结构增加如下字段
+```js
+{
+  ticking(),
+  msPerRound,
+  progress,
+  round,
+  inventory: {
+    storage: Array<ItemStack | null> // 放置机器时，按照inventory capacity数量初始化为null
+  },
+  peek(port: Port): string | null, // 查看某个输出口的物品类型，没有则为null
+  take(port: Port, amount: number): ItemStack | null, // 从输出口获取物品，没有则为null
+  activeInput(port: Port): { machine: PlacedMachine, port: Port } | null;
+}
+```
+2. 工厂有ticking方法，也有progress值 `{ ticking(), progress, simulatorTimeScale: 1 }`
+
+### 工厂ticking方法
+
+1. 工厂ticking方法会先获得所有machines， 拿到最小的min(msPerRound)
+2. progress递增msPerRound的值
+3. 遍历machines，判断单个machine的progress是否大于round*msPerRound，大于则round+=1，并ticking这个machine:
+```js 伪代码
+ticking() {
+  while (工厂关闭) {
+    const minMsPerRound = Math.min(machines.map((m) => m.msPerRound));
+    // 等待一轮处理
+    await delay(minMsPerRound * simulatorTimeScale);
+    // ...上文省略...
+    for (const machine of machines) {
+      machine.progress += minMsPerRound;
+      if (machine.progress >= round * machine.msPerRound) {
+        machine.round += 1;
+        machine.ticking();
+      }
+    }
+  }
+}
+```
+
+### machine的ticking
+
+#### 概念
+激活输入(activeInput)：找到in-port对应的out-port，例如，in-port的那个cell在 (1,1)，in-port在N，只会查找(0, 1)的S是否有out-port，有就可以激活输入。target_inventory为out-port对应的machine的inventory
+
+#### 传送带
+
+```js 伪代码
+ticking() {
+  // 传送带如果已经存在物品则跳过
+  if (this.inventory.storage[0]) return;
+  const input = ports.map((p) => p.type === 'IN')[0];
+  const { machine, port } = activeInput(input);
+  this.inventory.storage[0] = machine.inventory.take(port, 1);
+}
+peek() {
+  return this.inventory.storage[0]?.id;
+}
+take() {
+  const item = this.inventory.storage[0];
+  this.inventory.storage[0] = null;
+  return item;
+}
+```
+
+#### 存储箱
+```js 伪代码
+ticking() {
+  // 存储箱满了
+  if (this.inventory.storage.every((s) => !s || s.amount >= 50)) return;
+  for (const port of ports.map((p) => p.type === 'IN')) {
+    const { machine, port } = activeInput(input);
+    const type = machine.peek(port);
+    if (!type) continue;
+
+    const inboxIndex = this.inventory.storage.findIndex((s) => !s || (s.id === type && s.amount < 50));
+    // 被占满了，没有新的空格
+    if (inboxIndex === -1) continue;
+
+    const item = machine.take(port, 1);
+    if (this.inventory.storage[inbobIndex]) {
+      inbox.amount += item.amount;
+    } else {
+      this.inventory.storage[inbobIndex] = item;
+    }
+  }
+}
+peek() {
+  return this.inventory.storage.filter((s) => s)[0]?.id || null;
+}
+take() {
+  return this.inventory.storage.filter((s) => s)[0] || null;
+}
+```
+
+### 模拟控制工具
+
+工具栏中增加模拟控制工具，运行，暂停，默认为运行，和一个slider bar，拖动simulatorTimeScale从 0-2，默认为1。
+
+### 存储箱交互
+
+在canvas上点击存储箱会弹出dialog，里面可见6个invetory slot（capacity），dialog可以指定哪个slot有物品什么，数量多少个（暂时使用文本框）
+
+### 物品展示
+
+物品在传送带传递是会有物品展示效果(!!this.inventory.storage[0])，路径是从 IN port 流向 OUT port，从下一节传送带的IN port出来，又往下一节的 OUT port出去，直到流向机器的IN port，或者物品一直存在，没有inport来主动获取。
+
 ## 文件结构
 
 ```
