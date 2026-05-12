@@ -464,17 +464,19 @@ function App() {
         const path = findPath(beltStartPosRef.current.x, beltStartPosRef.current.y, x, y, factory.machines, true)
         if (path) {
           const startPos = path[0]
-          const existingAtStart = factory.machines.find(
-            m => m.x === startPos.x && m.y === startPos.y
-          )
-          const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, existingAtStart)
-          setFactory(prev => ({
-            ...prev,
-            machines: [
-              ...prev.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
-              ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
-            ],
-          }))
+          setFactory(prev => {
+            const existingAtStart = prev.machines.find(
+              m => m.x === startPos.x && m.y === startPos.y
+            )
+            const pieces = computeBeltPathPieces(path, beltStartDirRef.current!, existingAtStart)
+            return {
+              ...prev,
+              machines: [
+                ...prev.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
+                ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
+              ],
+            }
+          })
           const last = path[path.length - 1]
           const prev2 = path[path.length - 2]
           const lastDir: Dir = prev2.x === last.x
