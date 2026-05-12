@@ -68,6 +68,64 @@ describe('rotatePortPosition', () => {
     })
   })
 
+  describe('storage_box IN ports (0,0)-N, (1,0)-N, (2,0)-N', () => {
+    const width = 3
+    const height = 3
+    const ports = [
+      { x: 0, y: 0, orientation: 'N' as const },
+      { x: 1, y: 0, orientation: 'N' as const },
+      { x: 2, y: 0, orientation: 'N' as const },
+    ]
+
+    it('should not change ports when rotation is 0', () => {
+      const rotated = ports.map(p => ({
+        pos: rotatePortPosition(p.x, p.y, width, height, 0),
+        dir: rotateDir(p.orientation, 0)
+      }))
+      expect(rotated).toEqual([
+        { pos: { x: 0, y: 0 }, dir: 'N' },
+        { pos: { x: 1, y: 0 }, dir: 'N' },
+        { pos: { x: 2, y: 0 }, dir: 'N' },
+      ])
+    })
+
+    it('should become (2,0)-E, (2,1)-E, (2,2)-E after 90° rotation', () => {
+      const rotated = ports.map(p => ({
+        pos: rotatePortPosition(p.x, p.y, width, height, 90),
+        dir: rotateDir(p.orientation, 90)
+      }))
+      expect(rotated).toEqual([
+        { pos: { x: 2, y: 0 }, dir: 'E' },
+        { pos: { x: 2, y: 1 }, dir: 'E' },
+        { pos: { x: 2, y: 2 }, dir: 'E' },
+      ])
+    })
+
+    it('should become (2,2)-S, (1,2)-S, (0,2)-S after 180° rotation', () => {
+      const rotated = ports.map(p => ({
+        pos: rotatePortPosition(p.x, p.y, width, height, 180),
+        dir: rotateDir(p.orientation, 180)
+      }))
+      expect(rotated).toEqual([
+        { pos: { x: 2, y: 2 }, dir: 'S' },
+        { pos: { x: 1, y: 2 }, dir: 'S' },
+        { pos: { x: 0, y: 2 }, dir: 'S' },
+      ])
+    })
+
+    it('should become (0,2)-W, (0,1)-W, (0,0)-W after 270° rotation', () => {
+      const rotated = ports.map(p => ({
+        pos: rotatePortPosition(p.x, p.y, width, height, 270),
+        dir: rotateDir(p.orientation, 270)
+      }))
+      expect(rotated).toEqual([
+        { pos: { x: 0, y: 2 }, dir: 'W' },
+        { pos: { x: 0, y: 1 }, dir: 'W' },
+        { pos: { x: 0, y: 0 }, dir: 'W' },
+      ])
+    })
+  })
+
   describe('2x2 machine (center at 0.5,0.5)', () => {
     const width = 2
     const height = 2
