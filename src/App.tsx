@@ -572,20 +572,35 @@ function App() {
   const handleCenterView = () => {
     if (stageRef.current) {
       stageRef.current.position({ x: 0, y: 0 })
+      stageRef.current.scale({ x: 1, y: 1 })
       stageRef.current.batchDraw()
     }
   }
 
-  const handleSimToggle = () => {
-    setSimRunning(prev => !prev)
-  }
+  const handleWheel = (e: unknown) => {
+    const evt = (e as { evt: WheelEvent }).evt
+    evt.preventDefault()
+    const stage = stageRef.current
+    if (!stage) return
 
-  const handleSimSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSimTimeScale(Number(e.target.value))
-  }
+    const oldScale = stage.scaleX()
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return
 
-  const handleEmulatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setEmulatorType(e.target.value)
+    const scaleBy = 1.1
+    const newScale = evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    }
+
+    stage.scale({ x: newScale, y: newScale })
+    stage.position({
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    })
+    stage.batchDraw()
   }
 
   const handleSelectMachine = (type: string) => {
@@ -877,6 +892,7 @@ function App() {
         width={dimensions.width}
         height={dimensions.height}
         draggable={!placingMachine}
+        onWheel={handleWheel}
         onMouseMove={handleMouseMove}
         onClick={handleClick}
       >
