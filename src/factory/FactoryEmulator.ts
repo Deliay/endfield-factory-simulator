@@ -116,7 +116,7 @@ export class FactoryEmulator implements IEmulator {
   }
 
   setTimeScale(scale: number): void {
-    this.simulatorTimeScale = Math.max(0.1, Math.min(scale, 2))
+    this.simulatorTimeScale = Math.max(0.001, Math.min(scale, 2))
   }
 
   private getMachineCells(m: RuntimeMachine): { x: number; y: number }[] {

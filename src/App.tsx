@@ -468,6 +468,7 @@ function App() {
   const [placingRotation, setPlacingRotation] = useState(0)
   const [beltEndPos, setBeltEndPos] = useState<{ x: number; y: number } | null>(null)
   const [beltPreviewPieces, setBeltPreviewPieces] = useState<Array<{ x: number; y: number; type: string; rotate: number }> | null>(null)
+  const [beltStartPreview, setBeltStartPreview] = useState<{ x: number; y: number; dir: Dir } | null>(null)
   const [simRunning, setSimRunning] = useState(false)
   const [simTimeScale, setSimTimeScale] = useState(1)
   const [beltItems, setBeltItems] = useState<Map<string, string | null>>(new Map())
@@ -491,6 +492,7 @@ function App() {
         setPreviewPosition(null)
         dispatch({ type: 'RESET_BELT' })
         setBeltEndPos(null)
+        setBeltStartPreview(null)
         if (stageRef.current) {
           stageRef.current.container().style.cursor = 'default'
         }
@@ -621,6 +623,7 @@ function App() {
     setPlacingRotation(0)
     dispatch({ type: 'RESET_BELT' })
     setBeltEndPos(null)
+    setBeltStartPreview(null)
     if (stageRef.current) {
       stageRef.current.container().focus()
     }
@@ -635,8 +638,10 @@ function App() {
     const stagePos = stageRef.current.position()
     const stageScale = stageRef.current.scaleX()
 
-    const x = Math.floor((pointer.x - stagePos.x - offsetX) / (CELL_SIZE * stageScale))
-    const y = Math.floor((pointer.y - stagePos.y - offsetY) / (CELL_SIZE * stageScale))
+    const stageX = (pointer.x - stagePos.x) / stageScale
+    const stageY = (pointer.y - stagePos.y) / stageScale
+    const x = Math.floor((stageX - offsetX) / CELL_SIZE)
+    const y = Math.floor((stageY - offsetY) / CELL_SIZE)
 
     if (x >= 0 && x < GRID_COLS && y >= 0 && y < GRID_ROWS) {
       setPreviewPosition({ x, y })
@@ -657,10 +662,41 @@ function App() {
         }
         return
       }
+      if (placingMachine === 'belt' && !state.beltStartPos) {
+        setBeltEndPos(null)
+        setBeltPreviewPieces(null)
+        const existingBelt = state.machines.find(
+          m => m.x === x && m.y === y && (m.type === 'belt' || m.type.startsWith('belt_corner'))
+        )
+        if (existingBelt) {
+          const def = machineRegistry.get(existingBelt.type)
+          const inPort = def?.ports.find(p => p.port === 'IN')
+          const entryDir = inPort ? rotateDir(inPort.direction, existingBelt.rotate) : 'N'
+          setBeltStartPreview({ x, y, dir: entryDir })
+          stageRef.current.container().style.cursor = 'default'
+          return
+        }
+        const machinePort = findMachineOutPort(x, y, state.machines)
+        if (machinePort) {
+          setBeltStartPreview({ x: machinePort.outX, y: machinePort.outY, dir: machinePort.dir })
+          stageRef.current.container().style.cursor = 'default'
+          return
+        }
+        const result = findAdjacentOutPort(x, y, state.machines, ['S', 'E', 'N', 'W'])
+        if (result) {
+          setBeltStartPreview({ x, y, dir: result.dir })
+          stageRef.current.container().style.cursor = 'default'
+        } else {
+          setBeltStartPreview(null)
+          stageRef.current.container().style.cursor = 'not-allowed'
+        }
+        return
+      }
       const allowed = canPlaceMachine(placingMachine, x, y, placingRotation, state.machines)
       stageRef.current.container().style.cursor = allowed ? 'default' : 'not-allowed'
     } else {
       stageRef.current.container().style.cursor = 'not-allowed'
+      setBeltStartPreview(null)
     }
   }
 
@@ -897,6 +933,18 @@ function App() {
     />
   ) : null
 
+  const beltStartPreviewEl = placingMachine === 'belt' && !state.beltStartPos && beltStartPreview ? (
+    <Rect
+      x={offsetX + beltStartPreview.x * CELL_SIZE + 2}
+      y={offsetY + beltStartPreview.y * CELL_SIZE + 2}
+      width={CELL_SIZE - 4}
+      height={CELL_SIZE - 4}
+      fill="rgba(0, 200, 0, 0.3)"
+      stroke="rgba(0, 200, 0, 0.8)"
+      strokeWidth={2}
+    />
+  ) : null
+
   return (
     <>
       <Stage
@@ -914,6 +962,7 @@ function App() {
           {beltItemElements}
           {previewMachine}
           {beltStartIndicator}
+          {beltStartPreviewEl}
           {beltPreviewMachines}
         </Layer>
       </Stage>
@@ -935,15 +984,16 @@ function App() {
             {simRunning ? '⏸ 暂停' : '▶ 运行'}
           </button>
           <label className="speed-label">
-            速度: {simTimeScale.toFixed(1)}x
+            速度: {Number(simTimeScale).toFixed(3)}x
             <input
               type="range"
-              min="0.1"
+              min="0.001"
               max="2"
-              step="0.1"
-              value={simTimeScale}
-              onChange={handleSimSpeedChange}
-              className="speed-slider"
+              step="0.001"
+               value={simTimeScale}
+               onChange={handleSimSpeedChange}
+               onDoubleClick={() => setSimTimeScale(1)}
+               className="speed-slider"
             />
           </label>
           <select className="emulator-select" value={emulatorType} onChange={handleEmulatorChange}>
