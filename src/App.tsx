@@ -603,6 +603,18 @@ function App() {
     stage.batchDraw()
   }
 
+  const handleSimToggle = () => {
+    setSimRunning(prev => !prev)
+  }
+
+  const handleSimSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSimTimeScale(Number(e.target.value))
+  }
+
+  const handleEmulatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setEmulatorType(e.target.value)
+  }
+
   const handleSelectMachine = (type: string) => {
     setPlacingMachine(type)
     setPreviewPosition(null)
