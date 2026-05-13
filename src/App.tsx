@@ -350,9 +350,6 @@ export function computeBeltPathPieces(
   existing?: PlacedMachine[],
 ): Array<{ x: number; y: number; type: string; rotate: number }> {
   if (path.length === 0) return []
-  if (path.length === 1) {
-    return [{ x: path[0].x, y: path[0].y, type: 'belt', rotate: getBeltRotation(startDir) }]
-  }
 
   const pieces: Array<{ x: number; y: number; type: string; rotate: number }> = []
   let currentDir = startDir
@@ -438,6 +435,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
         ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
       ]
+      if (path.length === 1) {
+        return { ...state, machines, beltStartPos: null, beltStartDir: null }
+      }
       const last = path[path.length - 1]
       const prev2 = path[path.length - 2]
       const lastDir: Dir = prev2.x === last.x ? (prev2.y < last.y ? 'S' : 'N') : (prev2.x < last.x ? 'E' : 'W')
