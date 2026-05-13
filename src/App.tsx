@@ -13,6 +13,7 @@ import { emulatorRegistry } from './factory/emulatorRegistry'
 import type { IEmulator } from './factory/IEmulator'
 import './machines/belt'
 import './machines/storage_box'
+import './machines/log_splitter'
 
 const GRID_COLS = 64
 const GRID_ROWS = 64
@@ -706,7 +707,7 @@ function App() {
         const x = previewPosition.x
         const y = previewPosition.y
         const clickedMachine = state.machines.findIndex(
-          m => m.type === 'storage_box' && (() => {
+          m => (m.type === 'storage_box' || m.type === 'log_splitter') && (() => {
             const def = machineRegistry.get(m.type)
             if (!def) return false
             const w = m.rotate % 180 === 0 ? def.width : def.height

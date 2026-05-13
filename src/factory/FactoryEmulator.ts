@@ -67,7 +67,7 @@ export class FactoryEmulator implements IEmulator {
   private postTickMachine(machineIdx: number): void {
     const m = this.machines[machineIdx]
 
-    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
       if (m.inputBuffer[0]) {
         m.inventory.storage[0] = m.inputBuffer[0]
         m.inputBuffer[0] = null
@@ -211,7 +211,7 @@ export class FactoryEmulator implements IEmulator {
     const def = machineRegistry.get(m.type)
     if (!def) return
 
-    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
       if (m.inventory.storage[0] && m.inputBuffer[0]) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return

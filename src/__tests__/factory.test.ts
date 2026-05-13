@@ -3,6 +3,7 @@ import type { PlacedMachine } from '../types/Factory'
 import type { ItemStack } from '../types/Machine'
 import '../machines/belt'
 import '../machines/storage_box'
+import '../machines/log_splitter'
 import { FactoryEmulator } from '../factory/FactoryEmulator'
 import { computeBeltPathPieces } from '../App'
 import { type Dir } from '../utils/rotation'
@@ -116,6 +117,78 @@ describe('FactoryEmulator', () => {
       emulator.tick()
 
       expect(emulator.machines[0].inventory.storage[0]).toEqual(ore)
+    })
+  })
+
+  describe('log_splitter ticking', () => {
+    it('should pull item from upstream belt via IN:N port', () => {
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 0, 90),
+        pm('log_splitter', 0, 1),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should allow downstream belt to pull from splitter via OUT:S', () => {
+      const emulator = new FactoryEmulator([
+        pm('log_splitter', 0, 0),
+        pm('belt', 0, 1, 90),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should allow downstream belt to pull from splitter via OUT:E', () => {
+      const emulator = new FactoryEmulator([
+        pm('log_splitter', 0, 0),
+        pm('belt', 1, 0),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should allow downstream belt to pull from splitter via OUT:W', () => {
+      const emulator = new FactoryEmulator([
+        pm('log_splitter', 1, 0),
+        pm('belt', 0, 0, 180),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should propagate item through belt → splitter → belt chain', () => {
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 0, 90),
+        pm('log_splitter', 0, 1),
+        pm('belt', 0, 2, 90),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+      // belt(0,0) → splitter(0,1): item now in splitter's storage
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+
+      emulator.tick()
+      // splitter(0,1) → belt(0,2): item now in belt(0,2)'s storage
+      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[1].inventory.storage[0]).toBeNull()
     })
   })
 
