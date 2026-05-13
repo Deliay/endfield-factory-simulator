@@ -500,6 +500,16 @@ function App() {
           setPlacingRotation(prev => (prev + 90) % 360)
         }
       }
+      if (e.key === 'e' || e.key === 'E') {
+        setPlacingMachine('belt')
+        setPreviewPosition(null)
+        setPlacingRotation(0)
+        dispatch({ type: 'RESET_BELT' })
+        setBeltEndPos(null)
+        if (stageRef.current) {
+          stageRef.current.container().focus()
+        }
+      }
     }
 
     window.addEventListener('resize', handleResize)
