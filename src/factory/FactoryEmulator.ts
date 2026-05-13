@@ -1,25 +1,15 @@
 import { machineRegistry, type Port, type ItemStack } from '../types/Machine'
 import type { PlacedMachine } from '../types/Factory'
 import { rotateDir, rotatePortPosition, type Dir } from '../utils/rotation'
+import type { IEmulator, RuntimeMachine } from './IEmulator'
+import { emulatorRegistry } from './emulatorRegistry'
 
 const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
 const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
-export interface RuntimeMachine {
-  type: string
-  rotate: number
-  x: number
-  y: number
-  msPerRound: number
-  progress: number
-  round: number
-  inventory: {
-    storage: (ItemStack | null)[]
-  }
-  inputBuffer: (ItemStack | null)[]
-}
 
-export class FactoryEmulator {
-  machines: RuntimeMachine[]
+export class FactoryEmulator implements IEmulator {
+  readonly name = 'Default'
+  readonly machines: RuntimeMachine[]
   simulatorTimeScale: number = 1
   running: boolean = false
   onTick: ((items: Map<string, string | null>) => void) | null = null
@@ -222,7 +212,6 @@ export class FactoryEmulator {
     if (!def) return
 
     if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
-      // 如果buffer和inventory都满了，则跳过
       if (m.inventory.storage[0] && m.inputBuffer[0]) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
@@ -258,3 +247,5 @@ export class FactoryEmulator {
     }
   }
 }
+
+emulatorRegistry.register('default', 'Default', FactoryEmulator)

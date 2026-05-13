@@ -3,17 +3,19 @@ import { useState, useEffect, useReducer, useRef } from 'react'
 import { Stage, Layer, Line, Rect, Text } from 'react-konva'
 import type { Stage as StageType } from 'konva/lib/Stage'
 import { machineRegistry } from './types/Machine'
-import type { Factory, PlacedMachine } from './types/Factory'
+import type { PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
 import { StorageDialog } from './components/StorageDialog'
 import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
 import { FactoryEmulator } from './factory/FactoryEmulator'
+import { emulatorRegistry } from './factory/emulatorRegistry'
+import type { IEmulator } from './factory/IEmulator'
 import './machines/belt'
 import './machines/storage_box'
 
-const GRID_COLS = 16
-const GRID_ROWS = 16
+const GRID_COLS = 64
+const GRID_ROWS = 64
 const CELL_SIZE = 64
 
 function getOccupiedCells(
@@ -63,12 +65,6 @@ function canPlaceMachine(
   return true
 }
 
-class NotImplementedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'NotImplementedError'
-  }
-}
 
 const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
 const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
@@ -476,7 +472,8 @@ function App() {
   const [simTimeScale, setSimTimeScale] = useState(1)
   const [beltItems, setBeltItems] = useState<Map<string, string | null>>(new Map())
   const [storageDialog, setStorageDialog] = useState<{ machineIdx: number; storage: ({ id: string; amount: number } | null)[] } | null>(null)
-  const emulatorRef = useRef<FactoryEmulator | null>(null)
+  const [emulatorType, setEmulatorType] = useState('default')
+  const emulatorRef = useRef<IEmulator | null>(null)
 
   const allMachines = machineRegistry.getAll()
 
@@ -523,7 +520,9 @@ function App() {
   }, [simTimeScale])
 
   useEffect(() => {
-    const emulator = new FactoryEmulator(state.machines)
+    const entry = emulatorRegistry.get(emulatorType)
+    if (!entry) return
+    const emulator = new entry.ctor(state.machines)
     emulatorRef.current = emulator
     emulator.onTick = (items) => {
       setBeltItems(new Map(items))
@@ -536,7 +535,7 @@ function App() {
     return () => {
       emulator.stop()
     }
-  }, [state.machines])
+  }, [state.machines, emulatorType])
 
   useEffect(() => {
     const emulator = emulatorRef.current
@@ -573,6 +572,10 @@ function App() {
 
   const handleSimSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSimTimeScale(Number(e.target.value))
+  }
+
+  const handleEmulatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setEmulatorType(e.target.value)
   }
 
   const handleSelectMachine = (type: string) => {
@@ -905,6 +908,11 @@ function App() {
               className="speed-slider"
             />
           </label>
+          <select className="emulator-select" value={emulatorType} onChange={handleEmulatorChange}>
+            {emulatorRegistry.getAll().map(e => (
+              <option key={e.type} value={e.type}>{e.name}</option>
+            ))}
+          </select>
         </div>
       </div>
       {storageDialog && (

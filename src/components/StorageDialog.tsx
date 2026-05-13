@@ -1,10 +1,10 @@
 import { useState, type RefObject } from 'react'
-import type { FactoryEmulator } from '../factory/FactoryEmulator'
+import type { IEmulator } from '../factory/IEmulator'
 
 interface StorageDialogProps {
   machineIdx: number
   initialStorage: ({ id: string; amount: number } | null)[]
-  emulatorRef: RefObject<FactoryEmulator | null>
+  emulatorRef: RefObject<IEmulator | null>
   onClose: () => void
 }
 

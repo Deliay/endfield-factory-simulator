@@ -187,6 +187,16 @@ code {
   accent-color: #0088ff;
 }
 
+.emulator-select {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .storage-dialog-overlay {
   position: fixed;
   inset: 0;
