@@ -19,7 +19,7 @@ machineRegistry.register({
     { port: 'OUT', x: 2, y: 2, direction: 'S' },
   ],
   inventoryCapacity: 6,
-  msPerRound: 500,
+  msPerRound: 2000,
   toolIcon: STORAGE_BOX_TOOL_ICON,
   gridIcon: STORAGE_BOX_GRID_ICON,
   northSideImg: { url: STORAGE_BOX_NORTH_SIDE_IMG },

@@ -58,17 +58,18 @@ export class FactoryEmulator {
   tick(): void {
     const minMsPerRound = Math.min(...this.machines.map(m => m.msPerRound))
     if (!isFinite(minMsPerRound) || this.machines.length === 0) return
-
+    const ticked: number[] = [];
     for (let i = 0; i < this.machines.length; i++) {
       const m = this.machines[i]
       m.progress += minMsPerRound
       if (m.progress >= m.round * m.msPerRound) {
         m.round += 1
         this.tickMachine(i)
+        ticked.push(i);
       }
     }
 
-    for (let i = 0; i < this.machines.length; i++) {
+    for (const i of ticked) {
       this.postTickMachine(i)
     }
   }
@@ -221,15 +222,18 @@ export class FactoryEmulator {
     if (!def) return
 
     if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
-      if (m.inventory.storage[0]) return
-      if (m.inputBuffer[0]) return
+      // 如果buffer和inventory都满了，则跳过
+      if (m.inventory.storage[0] && m.inputBuffer[0]) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
       const source = this.activeInput(machineIdx, inPort)
       if (!source) return
       const item = this.take(source.machineIndex, source.port, 1)
       if (item) {
-        m.inputBuffer[0] = item
+        if (!m.inventory.storage[0]) {
+          m.inventory.storage[0] = m.inputBuffer[0];
+        }
+          m.inputBuffer[0] = item
       }
       return
     }

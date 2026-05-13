@@ -44,7 +44,7 @@ describe('FactoryEmulator', () => {
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
 
-    it('should not pull item when belt already has one', () => {
+    it('should pull into buffer when belt already has one in storage', () => {
       const emulator = new FactoryEmulator([
         pm('belt', 0, 0),
         pm('belt', 1, 0),
@@ -54,8 +54,10 @@ describe('FactoryEmulator', () => {
 
       emulator.tick()
 
-      expect(emulator.machines[1].inventory.storage[0]!.id).toBe('ingot')
-      expect(emulator.machines[0].inventory.storage[0]).toEqual(ore)
+      // Belt(1,0) had storage[0]=ingot, buffer was empty → pulls ore from upstream
+      // postTick moves buffer[0]=ore to storage[0], overwriting ingot
+      expect(emulator.machines[1].inventory.storage[0]!.id).toBe('ore')
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
   })
 
