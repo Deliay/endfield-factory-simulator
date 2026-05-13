@@ -38,6 +38,8 @@ interface MachineDefinition {
   width: number
   height: number
   ports: Port[]
+  inventoryCapacity: number
+  msPerRound: number
   backgroundImg?: string
   toolIcon?: string
   gridIcon?: string
@@ -48,6 +50,8 @@ interface MachineDefinition {
 - `width` 和 `height` 为整数，表示机器占用的网格数
 - `ports` 数组定义输入/输出端口，`x` 和 `y` 为整数坐标 (相对于机器左上角)
 - `direction`: 端口方向 (N/S/E/W)
+- `inventoryCapacity`: 库存容量 (belt=1, storage_box=6)
+- `msPerRound`: 每轮毫秒数 (belt=2000, storage_box=2000)
 - 使用 `MachineRegistry` (Map) 管理所有机器定义，key 为 `type`
 
 ### Factory 抽象
@@ -425,30 +429,68 @@ const offsetY = (dimensions.height - gridHeight) / 2
 ### 键盘事件
 - Escape: 取消放置，清除起点
 - R: 旋转当前放置的机器 90°
+- E: 切换到传送带放置工具
+
+### 画布缩放
+- 滚轮缩放: 向上放大，向下缩小 (以鼠标位置为中心)
+- 缩放范围: 无限制
+
+### 底部工具栏
+- 宽度 90%，最大 1200px
+- 机器选择按钮
+- 居中按钮
+- 模拟控制: 运行/暂停按钮 + 速度滑块 (0.001x–2x，双击重置为 1.0x)
+- 模拟器选择下拉框 (基于 IEmulator 接口 + emulatorRegistry)
 
 ## 工厂模拟
 
-工厂模拟系统FactoryEmulator，这个系统会处理所有的machine: PlacedMachine的运作
+工厂模拟系统基于 `IEmulator` 接口，支持多种模拟器实现，通过 `emulatorRegistry` 注册和切换。
+
+### IEmulator 接口
+```typescript
+interface IEmulator {
+  readonly name: string
+  readonly machines: RuntimeMachine[]
+  simulatorTimeScale: number
+  running: boolean
+  onTick: ((items: Map<string, string | null>) => void) | null
+  getItemMap(): Map<string, string | null>
+  tick(): void
+  start(): void
+  stop(): void
+  setTimeScale(scale: number): void
+}
+
+interface RuntimeMachine {
+  type: string
+  rotate: number
+  x: number
+  y: number
+  msPerRound: number
+  progress: number
+  round: number
+  inventory: { storage: (ItemStack | null)[] }
+  inputBuffer: (ItemStack | null)[]  // 每 IN port 一个缓冲槽
+}
+```
+
+### FactoryEmulator (默认实现)
+处理所有的 RuntimeMachine 的运作，使用 tick + postTick 两阶段模式。所有机器 msPerRound 均为 2000，每轮所有机器都 tick。
 
 0. Machine的定义增加如下字段
-
 - inventoryCapacity: 传送带为1， storage_box为6
 - ItemStack: { id: string, amount: number }
 
-1. PlacedMachine结构增加如下字段
+1. RuntimeMachine结构增加如下字段
 ```js
 {
-  ticking(),
-  postTicking(),
+  inputBuffer: Array<ItemStack | null> // 输入口缓冲区，每 IN port 一个
   msPerRound,
   progress,
   round,
   inventory: {
     storage: Array<ItemStack | null> // 放置机器时，按照inventory capacity数量初始化为null
   },
-  peek(port: Port): string | null, // 查看某个输出口的物品类型，没有则为null
-  take(port: Port, amount: number): ItemStack | null, // 从输出口获取物品，没有则为null
-  activeInput(port: Port): { machine: PlacedMachine, port: Port } | null;
 }
 ```
 2. 工厂有ticking方法，也有progress值 `{ ticking(), progress, simulatorTimeScale: 1 }`
@@ -457,20 +499,22 @@ const offsetY = (dimensions.height - gridHeight) / 2
 
 1. 工厂ticking方法会先获得所有machines， 拿到最小的min(msPerRound)
 2. progress递增msPerRound的值
-3. 遍历machines，判断单个machine的progress是否大于round*msPerRound，大于则round+=1，并ticking这个machine:
+3. 遍历machines，判断单个machine的progress是否大于round*msPerRound，大于则round+=1，并ticking这个machine
+4. 所有 machine ticking 完成后，执行 postTicking 将输入缓冲区写入 storage
 ```js 伪代码
 ticking() {
   while (工厂关闭) {
     const minMsPerRound = Math.min(machines.map((m) => m.msPerRound));
-    // 等待一轮处理
     await delay(minMsPerRound * simulatorTimeScale);
-    // ...上文省略...
     for (const machine of machines) {
       machine.progress += minMsPerRound;
       if (machine.progress >= round * machine.msPerRound) {
         machine.round += 1;
-        machine.ticking();
+        machine.ticking();   // 从上游取物品到 inputBuffer
       }
+    }
+    for (const machine of machines) {
+      machine.postTicking();  // inputBuffer → storage
     }
   }
 }
@@ -485,15 +529,25 @@ ticking() {
 
 ```js 伪代码
 ticking() {
-  // 传送带如果已经存在物品则跳过
-  if (this.inventory.storage[0]) return;
-  const input = ports.map((p) => p.type === 'IN')[0];
+  // 如果 buffer 和 storage 都满了则跳过
+  if (this.inventory.storage[0] && this.inputBuffer[0]) return;
+  const input = ports.filter((p) => p.type === 'IN')[0];
   const { machine, port } = activeInput(input);
-  this.inventory.storage[0] = machine.inventory.take(port, 1);
+  const item = machine.inventory.take(port, 1);
+  if (item) {
+    if (!this.inventory.storage[0]) {
+      this.inventory.storage[0] = this.inputBuffer[0]; // 刷新缓冲到库存
+    }
+    this.inputBuffer[0] = item; // 新物品进入缓冲
+  }
 }
-peek() {
-  return this.inventory.storage[0]?.id;
+postTicking() {
+  if (this.inputBuffer[0]) {
+    this.inventory.storage[0] = this.inputBuffer[0];
+    this.inputBuffer[0] = null;
+  }
 }
+peek() { return this.inventory.storage[0]?.id; }
 take() {
   const item = this.inventory.storage[0];
   this.inventory.storage[0] = null;
@@ -504,44 +558,54 @@ take() {
 #### 存储箱
 ```js 伪代码
 ticking() {
-  // 存储箱满了
-  if (this.inventory.storage.every((s) => !s || s.amount >= 50)) return;
-  for (const port of ports.map((p) => p.type === 'IN')) {
-    const { machine, port } = activeInput(input);
+  if (this.inventory.storage.every((s) => s !== null && s.amount >= 50)) return;
+  for (let pi = 0; pi < inPorts.length; pi++) {
+    if (this.inputBuffer[pi]) continue;
+    const { machine, port } = activeInput(inPorts[pi]);
     const type = machine.peek(port);
     if (!type) continue;
-
-    const inboxIndex = this.inventory.storage.findIndex((s) => !s || (s.id === type && s.amount < 50));
-    // 被占满了，没有新的空格
-    if (inboxIndex === -1) continue;
-
     const item = machine.take(port, 1);
-    if (this.inventory.storage[inbobIndex]) {
-      inbox.amount += item.amount;
-    } else {
-      this.inventory.storage[inbobIndex] = item;
-    }
+    if (item) this.inputBuffer[pi] = item;
   }
 }
-peek() {
-  return this.inventory.storage.filter((s) => s)[0]?.id || null;
+postTicking() {
+  for (let pi = 0; pi < inputBuffer.length; pi++) {
+    const bufItem = this.inputBuffer[pi];
+    if (!bufItem) continue;
+    const inboxIndex = this.inventory.storage.findIndex(
+      (s) => !s || (s.id === bufItem.id && s.amount < 50)
+    );
+    if (inboxIndex === -1) continue;
+    if (this.inventory.storage[inboxIndex]) {
+      this.inventory.storage[inboxIndex].amount += bufItem.amount;
+    } else {
+      this.inventory.storage[inboxIndex] = bufItem;
+    }
+    this.inputBuffer[pi] = null;
+  }
 }
-take() {
-  return this.inventory.storage.filter((s) => s)[0] || null;
-}
+peek() { return this.inventory.storage.filter((s) => s)[0]?.id || null; }
+take() { return this.inventory.storage.filter((s) => s)[0] || null; }
 ```
 
 ### 模拟控制工具
 
-工具栏中增加模拟控制工具，运行，暂停，默认为运行，和一个slider bar，拖动simulatorTimeScale从 0-2，默认为1。
+工具栏中增加模拟控制工具，运行，暂停，默认为暂停，和一个slider bar，拖动simulatorTimeScale从 0.001-2，默认为1。双击 slider 重置为 1.0。
 
 ### 存储箱交互
 
-在canvas上点击存储箱会弹出dialog，里面可见6个invetory slot（capacity），dialog可以指定哪个slot有物品什么，数量多少个（暂时使用文本框）
+在canvas上点击存储箱会弹出dialog，里面可见6个invetory slot（capacity），dialog可以指定哪个slot有物品什么，数量多少个（暂时使用文本框），关闭时写回模拟器。
 
 ### 物品展示
 
-物品在传送带传递是会有物品展示效果(!!this.inventory.storage[0])，路径是从 IN port 流向 OUT port，从下一节传送带的IN port出来，又往下一节的 OUT port出去，直到流向机器的IN port，或者物品一直存在，没有inport来主动获取。
+物品在传送带传递时显示黄色方块 + 物品 ID 文字，路径是从 IN port 流向 OUT port，从下一节传送带的IN port出来，又往下一节的 OUT port出去，直到流向机器的IN port，或者物品一直存在，没有inport来主动获取。
+
+### 传送带起点预览
+
+选择传送带工具后、第一次点击前，悬停时显示起点预览（绿色高亮）：
+- 悬停在已有传送带上 → 显示该 cell 为起点
+- 悬停在机器内部 → 显示最近的 OUT port feeding cell
+- 悬停在空 cell → 检测相邻机器的 OUT port
 
 ### 测试用例
 
@@ -570,18 +634,32 @@ CASE1: 在(1,1)放置storage_box，初始化物品为 { id: 'item_test', amount:
 src/
 ├── components/
 │   ├── MachineImage.tsx    # 通用机器渲染组件
-│   └── ToolButton.tsx      # 通用工具栏按钮组件
+│   ├── ToolButton.tsx      # 通用工具栏按钮组件
+│   └── StorageDialog.tsx   # 存储箱编辑对话框
+├── factory/
+│   ├── IEmulator.ts        # 模拟器接口 + RuntimeMachine 类型
+│   ├── emulatorRegistry.ts # 模拟器注册表
+│   └── FactoryEmulator.ts  # 默认模拟器实现
 ├── hooks/
 │   └── useImage.ts         # 图片加载 hook
 ├── machines/
 │   ├── belt.ts             # 传送带定义 (belt, belt_corner_ne, belt_corner_en)
 │   └── storage_box.ts      # 协议存储箱定义
 ├── types/
-│   ├── Machine.ts          # 机器类型定义和 Registry
-│   └── Factory.ts          # 工厂类型定义
+│   ├── Machine.ts          # 机器类型定义和 Registry, ItemStack
+│   └── Factory.ts          # 工厂类型定义 (PlacedMachine)
 ├── utils/
-│   └── rotation.ts         # 方向旋转工具函数
+│   ├── rotation.ts         # 方向旋转工具函数
+│   └── __tests__/
+├── __tests__/
+│   ├── App.test.ts         # App 组件算法测试
+│   ├── beltPath.test.ts    # 传送带路径测试
+│   ├── beltPlacement.spec.test.ts  # 传送带放置场景测试
+│   ├── beltCase.test.ts    # 具体场景测试
+│   └── factory.test.ts     # FactoryEmulator 单元测试 + CASE1 集成测试
 ├── App.tsx                 # 主应用组件 (包含所有核心算法)
+├── App.css
+├── index.css               # 全局样式 (含工具栏/对话框样式)
 └── main.tsx                # 入口文件
 ```
 
