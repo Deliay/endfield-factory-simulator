@@ -75,6 +75,17 @@ export class FactoryEmulator implements IEmulator {
       return
     }
 
+    if (m.type === 'log_converger' || m.type === 'log_connector') {
+      for (let pi = 0; pi < m.inputBuffer.length; pi++) {
+        const bufItem = m.inputBuffer[pi]
+        if (!bufItem) continue
+        if (m.inventory.storage[0]) continue
+        m.inventory.storage[0] = bufItem
+        m.inputBuffer[pi] = null
+      }
+      return
+    }
+
     if (m.type === 'storage_box') {
       for (let pi = 0; pi < m.inputBuffer.length; pi++) {
         const bufItem = m.inputBuffer[pi]
@@ -223,6 +234,21 @@ export class FactoryEmulator implements IEmulator {
           m.inventory.storage[0] = m.inputBuffer[0];
         }
           m.inputBuffer[0] = item
+      }
+      return
+    }
+
+    if (m.type === 'log_converger' || m.type === 'log_connector') {
+      if (m.inventory.storage[0] && m.inputBuffer.every(b => b !== null)) return
+      const inPorts = def.ports.filter(p => p.port === 'IN')
+      for (let pi = 0; pi < inPorts.length; pi++) {
+        if (m.inputBuffer[pi]) continue
+        const inPort = inPorts[pi]
+        const source = this.activeInput(machineIdx, inPort)
+        if (!source) continue
+        const item = this.take(source.machineIndex, source.port, 1)
+        if (!item) continue
+        m.inputBuffer[pi] = item
       }
       return
     }

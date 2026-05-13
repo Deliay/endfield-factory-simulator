@@ -14,6 +14,8 @@ import type { IEmulator } from './factory/IEmulator'
 import './machines/belt'
 import './machines/storage_box'
 import './machines/log_splitter'
+import './machines/log_converger'
+import './machines/log_connector'
 
 const GRID_COLS = 64
 const GRID_ROWS = 64
@@ -56,8 +58,10 @@ function canPlaceMachine(
   const h = rotate % 180 === 0 ? def.height : def.width
   if (x < 0 || y < 0 || x + w > GRID_COLS || y + h > GRID_ROWS) return false
 
+  const isReplacer = type === 'log_splitter' || type === 'log_connector' || type === 'log_converger'
   const newCells = getOccupiedCells(def, x, y, rotate)
   for (const pm of existing) {
+    if (isReplacer && pm.type === 'belt') continue
     const occupied = getOccupiedCellsByMachine(pm)
     for (const cell of newCells) {
       if (occupied.has(cell)) return false
@@ -224,52 +228,61 @@ export function findPath(
     return [{ x: startX, y: startY }]
   }
 
-  const tryPath = (path: Array<{ x: number; y: number }>): boolean => {
+  const tryPath = (path: Array<{ x: number; y: number }>, allowCross?: boolean): boolean => {
     for (let i = excludeStart ? 1 : 0; i < path.length; i++) {
-      if (isCellOccupied(path[i].x, path[i].y, existing)) {
+      if (!isCellOccupied(path[i].x, path[i].y, existing)) continue
+      if (!allowCross) return false
+      const crossOccupant = (() => {
+        for (const m of existing) {
+          if (getMachineCells(m).some(c => c.x === path[i].x && c.y === path[i].y)) return m
+        }
+        return null
+      })()
+      if (!crossOccupant || !(crossOccupant.type === 'belt' || crossOccupant.type.startsWith('belt_corner'))) {
         return false
       }
     }
     return true
   }
 
-  if (startX === endX) {
-    const path: Array<{ x: number; y: number }> = []
-    if (startY < endY) {
-      for (let y = startY; y <= endY; y++) path.push({ x: startX, y })
-    } else {
-      for (let y = startY; y >= endY; y--) path.push({ x: startX, y })
+  const findBestPath = (): { x: number; y: number }[] | null => {
+    const candidates: Array<{ x: number; y: number }[]> = []
+    if (startX === endX) {
+      const p: Array<{ x: number; y: number }> = []
+      if (startY < endY) for (let y = startY; y <= endY; y++) p.push({ x: startX, y })
+      else for (let y = startY; y >= endY; y--) p.push({ x: startX, y })
+      candidates.push(p)
     }
-    if (tryPath(path)) return path
+    if (startY === endY) {
+      const p: Array<{ x: number; y: number }> = []
+      if (startX < endX) for (let x = startX; x <= endX; x++) p.push({ x, y: startY })
+      else for (let x = startX; x >= endX; x--) p.push({ x, y: startY })
+      candidates.push(p)
+    }
+    const corner1 = { x: endX, y: startY }
+    candidates.push([
+      { x: startX, y: startY },
+      ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: startY })),
+      ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: endX, y })),
+    ])
+    const corner2 = { x: startX, y: endY }
+    candidates.push([
+      { x: startX, y: startY },
+      ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: startX, y })),
+      ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: endY })),
+    ])
+    // First pass: prefer paths without belt crossings
+    for (const p of candidates) {
+      if (tryPath(p, false)) return p
+    }
+    // Second pass: allow belt crossings
+    for (const p of candidates) {
+      if (tryPath(p, true)) return p
+    }
+    return null
   }
 
-  if (startY === endY) {
-    const path: Array<{ x: number; y: number }> = []
-    if (startX < endX) {
-      for (let x = startX; x <= endX; x++) path.push({ x, y: startY })
-    } else {
-      for (let x = startX; x >= endX; x--) path.push({ x, y: startY })
-    }
-    if (tryPath(path)) return path
-  }
-
-  const corner1 = { x: endX, y: startY }
-  const path1 = [
-    { x: startX, y: startY },
-    ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: startY })),
-    ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: endX, y })),
-  ]
-  if (tryPath(path1)) return path1
-
-  const corner2 = { x: startX, y: endY }
-  const path2 = [
-    { x: startX, y: startY },
-    ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: startX, y })),
-    ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: endY })),
-  ]
-  if (tryPath(path2)) return path2
-
-  return null
+  return findBestPath()
 }
 
 function range(start: number, end: number, step: number = 1): number[] {
@@ -391,12 +404,35 @@ export function computeBeltPathPieces(
       exitDir = curr.x === next.x ? (curr.y < next.y ? 'S' : 'N') : (curr.x < next.x ? 'E' : 'W')
     }
 
+    let pieceType = 'belt'
+    let pieceRotate = getBeltRotation(exitDir)
     const corner = getCornerTypeAndRotation(currentDir, exitDir)
     if (corner) {
-      pieces.push({ x: curr.x, y: curr.y, type: corner.type, rotate: corner.rotate })
-    } else {
-      pieces.push({ x: curr.x, y: curr.y, type: 'belt', rotate: getBeltRotation(exitDir) })
+      pieceType = corner.type
+      pieceRotate = corner.rotate
     }
+
+    if (!isStart && existing) {
+      const crossedBelt = existing.find(
+        m => m.x === curr.x && m.y === curr.y && m.type === 'belt'
+      )
+      if (crossedBelt) {
+        const cbDef = machineRegistry.get(crossedBelt.type)
+        if (cbDef) {
+          const cbInPort = cbDef.ports.find(p => p.port === 'IN')
+          if (cbInPort) {
+            const cbInDir = rotateDir(cbInPort.direction, crossedBelt.rotate)
+            const isAligned = cbInDir === currentDir || cbInDir === OPPOSITE[currentDir]
+            if (!isAligned) {
+              pieceType = 'log_connector'
+              pieceRotate = 0
+            }
+          }
+        }
+      }
+    }
+
+    pieces.push({ x: curr.x, y: curr.y, type: pieceType, rotate: pieceRotate })
 
     currentDir = OPPOSITE[exitDir]
   }
@@ -431,8 +467,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const startPos = path[0]
       const existingAtStart = state.machines.find(m => m.x === startPos.x && m.y === startPos.y)
       const pieces = computeBeltPathPieces(path, d, existingAtStart, state.machines)
+      const piecePositions = new Set(pieces.map(p => `${p.x},${p.y}`))
       const machines = [
-        ...state.machines.filter(m => !(m.x === startPos.x && m.y === startPos.y)),
+        ...state.machines.filter(m => {
+          const key = `${m.x},${m.y}`
+          if (key === `${startPos.x},${startPos.y}`) return false
+          if (m.type === 'belt' && piecePositions.has(key)) return false
+          return true
+        }),
         ...pieces.map(p => ({ type: p.type, rotate: p.rotate, x: p.x, y: p.y })),
       ]
       if (path.length === 1) {
@@ -447,11 +489,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
         beltStartDir: OPPOSITE[lastDir],
       }
     }
-    case 'PLACE_MACHINE':
+    case 'PLACE_MACHINE': {
+      const isReplacer = action.machineType === 'log_splitter' || action.machineType === 'log_connector' || action.machineType === 'log_converger'
       return {
         ...state,
-        machines: [...state.machines, { type: action.machineType, rotate: action.rotate, x: action.x, y: action.y }],
+        machines: [
+          ...state.machines.filter(m => !(
+            isReplacer && m.type === 'belt' &&
+            m.x === action.x && m.y === action.y
+          )),
+          { type: action.machineType, rotate: action.rotate, x: action.x, y: action.y },
+        ],
       }
+    }
     case 'RESET_BELT':
       return { ...state, beltStartPos: null, beltStartDir: null }
   }
@@ -707,7 +757,7 @@ function App() {
         const x = previewPosition.x
         const y = previewPosition.y
         const clickedMachine = state.machines.findIndex(
-          m => (m.type === 'storage_box' || m.type === 'log_splitter') && (() => {
+          m => (m.type === 'storage_box' || m.type === 'log_splitter' || m.type === 'log_converger' || m.type === 'log_connector') && (() => {
             const def = machineRegistry.get(m.type)
             if (!def) return false
             const w = m.rotate % 180 === 0 ? def.width : def.height

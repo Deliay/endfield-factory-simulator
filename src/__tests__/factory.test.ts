@@ -4,8 +4,9 @@ import type { ItemStack } from '../types/Machine'
 import '../machines/belt'
 import '../machines/storage_box'
 import '../machines/log_splitter'
+import '../machines/log_connector'
 import { FactoryEmulator } from '../factory/FactoryEmulator'
-import { computeBeltPathPieces } from '../App'
+import { computeBeltPathPieces, findPath } from '../App'
 import { type Dir } from '../utils/rotation'
 
 
@@ -189,6 +190,130 @@ describe('FactoryEmulator', () => {
       // splitter(0,1) → belt(0,2): item now in belt(0,2)'s storage
       expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
       expect(emulator.machines[1].inventory.storage[0]).toBeNull()
+    })
+  })
+
+  describe('log_connector ticking', () => {
+    it('should pull item from upstream belt via IN:N port', () => {
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 0, 90),
+        pm('log_connector', 0, 1),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should pull item from upstream belt via IN:E port', () => {
+      const emulator = new FactoryEmulator([
+        pm('belt', 1, 0, 180),
+        pm('log_connector', 0, 0),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should allow downstream belt to pull from connector via OUT:S', () => {
+      const emulator = new FactoryEmulator([
+        pm('log_connector', 0, 0),
+        pm('belt', 0, 1, 90),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+  })
+
+  describe('belt crossing detection', () => {
+    it('should replace crossed belt cell with connector when perpendicular', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'belt', x: 1, y: 1, rotate: 0 },
+      ]
+      // belt at (1,1) rotate 0: IN:W, OUT:E (flow W→E)
+      // path goes N→S through (1,1), which is perpendicular
+      const path = [
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+      ]
+      const pieces = computeBeltPathPieces(path, 'S', undefined, existing)
+      const crossing = pieces.find(p => p.x === 1 && p.y === 1)
+      expect(crossing).toBeDefined()
+      expect(crossing!.type).toBe('log_connector')
+    })
+
+    it('should NOT replace aligned belt cell with connector', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'belt', x: 1, y: 1, rotate: 0 },
+      ]
+      // belt at (1,1) rotate 0: IN:W, OUT:E (flow W→E)
+      // path also goes W→E through (1,1), which is aligned
+      const path = [
+        { x: 0, y: 1 },
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+      ]
+      const pieces = computeBeltPathPieces(path, 'E', undefined, existing)
+      const crossing = pieces.find(p => p.x === 1 && p.y === 1)
+      expect(crossing).toBeDefined()
+      expect(crossing!.type).not.toBe('log_connector')
+    })
+
+    it('should not replace corner belt with connector', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'belt_corner_ne', x: 1, y: 1, rotate: 0 },
+      ]
+      const path = [
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+        { x: 1, y: 2 },
+      ]
+      const pieces = computeBeltPathPieces(path, 'S', undefined, existing)
+      const crossing = pieces.find(p => p.x === 1 && p.y === 1)
+      expect(crossing).toBeDefined()
+      expect(crossing!.type).not.toBe('log_connector')
+    })
+
+    it('findPath should allow crossing a belt cell', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'belt', x: 1, y: 1, rotate: 0 },
+      ]
+      const path = findPath(1, 0, 1, 2, existing, true)
+      expect(path).not.toBeNull()
+      expect(path!.some(p => p.x === 1 && p.y === 1)).toBe(true)
+    })
+
+    it('findPath should still reject crossing a non-belt machine', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'log_splitter', x: 1, y: 1, rotate: 0 },
+      ]
+      const path = findPath(1, 0, 1, 2, existing, true)
+      expect(path).toBeNull()
+    })
+
+    it('should not replace start tile with splitter', () => {
+      const existing: PlacedMachine[] = [
+        { type: 'belt', x: 1, y: 0, rotate: 0 },
+      ]
+      const path = [
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+      ]
+      const pieces = computeBeltPathPieces(path, 'S', undefined, existing)
+      const startPiece = pieces.find(p => p.x === 1 && p.y === 0)
+      expect(startPiece).toBeDefined()
+      // start piece should be belt or corner, not splitter
+      expect(startPiece!.type).not.toBe('log_connector')
     })
   })
 
