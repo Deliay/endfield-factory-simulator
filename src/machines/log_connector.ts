@@ -18,7 +18,7 @@ machineRegistry.register({
     { port: 'OUT', x: 0, y: 0, direction: 'S' },
     { port: 'OUT', x: 0, y: 0, direction: 'W' },
   ],
-  inventoryCapacity: 1,
+  inventoryCapacity: 4,
   msPerRound: 2000,
   toolIcon: CONNECTOR_TOOL_ICON,
   gridIcon: CONNECTOR_GRID_ICON,

@@ -216,7 +216,8 @@ describe('FactoryEmulator', () => {
 
       emulator.tick()
 
-      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      // IN:E is port index 1 → per-direction storage slot 1
+      expect(emulator.machines[1].inventory.storage[1]).toEqual(ore)
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
 
@@ -230,6 +231,85 @@ describe('FactoryEmulator', () => {
       emulator.tick()
 
       expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should flow N→S through connector', () => {
+      // belt(0,0,90)[OUT:S] → connector(0,1)[IN:N]→[OUT:S] → belt(0,2,90)[IN:N]
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 0, 90),
+        pm('log_connector', 0, 1),
+        pm('belt', 0, 2, 90),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+      // tick 1: belt(0,0)→connector IN:N (into buffer), connector OUT:S feeds toward (0,2)
+      // postTick 1: connector buffer→storage, belt(0,2) has nothing yet
+      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+
+      emulator.tick()
+      // tick 2: belt(0,2) takes from connector storage → belt(0,2) buffer
+      // postTick 2: belt(0,2) buffer→storage
+      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[1].inventory.storage[0]).toBeNull()
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should flow S→N through connector', () => {
+      // belt(0,2,270)[OUT:N] → connector(0,1)[IN:S]→[OUT:N] → belt(0,0,270)[IN:S]
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 2, 270),
+        pm('log_connector', 0, 1),
+        pm('belt', 0, 0, 270),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+      // IN:S is port index 2 → per-direction storage slot 2
+      expect(emulator.machines[1].inventory.storage[2]).toEqual(ore)
+
+      emulator.tick()
+      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[1].inventory.storage[2]).toBeNull()
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should flow W→E through connector', () => {
+      // belt(0,0,0)[OUT:E] → connector(1,0)[IN:W]→[OUT:E] → belt(2,0,0)[IN:W]
+      const emulator = new FactoryEmulator([
+        pm('belt', 0, 0, 0),
+        pm('log_connector', 1, 0),
+        pm('belt', 2, 0, 0),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+      // IN:W is port index 3 → per-direction storage slot 3
+      expect(emulator.machines[1].inventory.storage[3]).toEqual(ore)
+
+      emulator.tick()
+      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[1].inventory.storage[3]).toBeNull()
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+    })
+
+    it('should flow E→W through connector', () => {
+      // belt(2,0,180)[OUT:W] → connector(1,0)[IN:E]→[OUT:W] → belt(0,0,180)[IN:E]
+      const emulator = new FactoryEmulator([
+        pm('belt', 2, 0, 180),
+        pm('log_connector', 1, 0),
+        pm('belt', 0, 0, 180),
+      ])
+      emulator.machines[0].inventory.storage[0] = { ...ore }
+
+      emulator.tick()
+      // IN:E is port index 1 → per-direction storage slot 1
+      expect(emulator.machines[1].inventory.storage[1]).toEqual(ore)
+
+      emulator.tick()
+      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      expect(emulator.machines[1].inventory.storage[1]).toBeNull()
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
   })

@@ -75,12 +75,23 @@ export class FactoryEmulator implements IEmulator {
       return
     }
 
-    if (m.type === 'log_converger' || m.type === 'log_connector') {
+    if (m.type === 'log_converger') {
       for (let pi = 0; pi < m.inputBuffer.length; pi++) {
         const bufItem = m.inputBuffer[pi]
         if (!bufItem) continue
         if (m.inventory.storage[0]) continue
         m.inventory.storage[0] = bufItem
+        m.inputBuffer[pi] = null
+      }
+      return
+    }
+
+    if (m.type === 'log_connector') {
+      for (let pi = 0; pi < m.inputBuffer.length; pi++) {
+        const bufItem = m.inputBuffer[pi]
+        if (!bufItem) continue
+        if (m.inventory.storage[pi]) continue
+        m.inventory.storage[pi] = bufItem
         m.inputBuffer[pi] = null
       }
       return
@@ -203,8 +214,22 @@ export class FactoryEmulator implements IEmulator {
     return m.inventory.storage.find(s => s !== null)?.id ?? null
   }
 
-  take(machineIdx: number, _port: Port, amount: number): ItemStack | null {
+  take(machineIdx: number, port: Port, amount: number): ItemStack | null {
     const m = this.machines[machineIdx]
+
+    if (m.type === 'log_connector') {
+      const OUT_DIR_TO_SLOT: Record<string, number> = { S: 0, W: 1, N: 2, E: 3 }
+      const slotIdx = OUT_DIR_TO_SLOT[port.direction]
+      const item = m.inventory.storage[slotIdx]
+      if (!item) return null
+      const taken: ItemStack = { id: item.id, amount: Math.min(amount, item.amount) }
+      item.amount -= taken.amount
+      if (item.amount <= 0) {
+        m.inventory.storage[slotIdx] = null
+      }
+      return taken
+    }
+
     const idx = m.inventory.storage.findIndex(s => s !== null)
     if (idx === -1) return null
     const item = m.inventory.storage[idx]
@@ -235,11 +260,26 @@ export class FactoryEmulator implements IEmulator {
       return
     }
 
-    if (m.type === 'log_converger' || m.type === 'log_connector') {
+    if (m.type === 'log_converger') {
       if (m.inventory.storage[0] && m.inputBuffer.every(b => b !== null)) return
       const inPorts = def.ports.filter(p => p.port === 'IN')
       for (let pi = 0; pi < inPorts.length; pi++) {
         if (m.inputBuffer[pi]) continue
+        const inPort = inPorts[pi]
+        const source = this.activeInput(machineIdx, inPort)
+        if (!source) continue
+        const item = this.take(source.machineIndex, source.port, 1)
+        if (!item) continue
+        m.inputBuffer[pi] = item
+      }
+      return
+    }
+
+    if (m.type === 'log_connector') {
+      const inPorts = def.ports.filter(p => p.port === 'IN')
+      for (let pi = 0; pi < inPorts.length; pi++) {
+        if (m.inputBuffer[pi]) continue
+        if (m.inventory.storage[pi] && m.inventory.storage[pi].amount >= 50) continue
         const inPort = inPorts[pi]
         const source = this.activeInput(machineIdx, inPort)
         if (!source) continue
