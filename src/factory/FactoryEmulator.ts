@@ -77,12 +77,11 @@ export class FactoryEmulator implements IEmulator {
     }
 
     if (m.type === 'log_splitter') {
-      const bufItem = m.inputBuffer[0]
-      if (!bufItem) return
+      if (!m.inputBuffer[0]) return
       for (let i = 0; i < m.inventory.storage.length; i++) {
         const slotIdx = (m.nextOutSlot + i) % m.inventory.storage.length
         if (m.inventory.storage[slotIdx]) continue
-        m.inventory.storage[slotIdx] = bufItem
+        m.inventory.storage[slotIdx] = m.inputBuffer[0]
         m.inputBuffer[0] = null
         m.nextOutSlot = (slotIdx + 1) % m.inventory.storage.length
         return
@@ -290,7 +289,7 @@ export class FactoryEmulator implements IEmulator {
 
     if (m.type === 'log_splitter') {
       if (m.inputBuffer[0]) return
-      if (m.inventory.storage.every(s => s !== null && s.amount >= 50)) return
+      if (m.inventory.storage.every(s => s !== null)) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
       const source = this.activeInput(machineIdx, inPort)
@@ -303,7 +302,8 @@ export class FactoryEmulator implements IEmulator {
     }
 
     if (m.type === 'log_converger') {
-      if (m.inventory.storage[0] && m.inputBuffer.every(b => b !== null)) return
+      if (m.inventory.storage[0]) return
+      if (m.inputBuffer.some(b => b !== null)) return
       const inPorts = def.ports.filter(p => p.port === 'IN')
       for (let pi = 0; pi < inPorts.length; pi++) {
         if (m.inputBuffer[pi]) continue
@@ -313,6 +313,7 @@ export class FactoryEmulator implements IEmulator {
         const item = this.take(source.machineIndex, source.port, 1)
         if (!item) continue
         m.inputBuffer[pi] = item
+        return
       }
       return
     }
@@ -321,7 +322,7 @@ export class FactoryEmulator implements IEmulator {
       const inPorts = def.ports.filter(p => p.port === 'IN')
       for (let pi = 0; pi < inPorts.length; pi++) {
         if (m.inputBuffer[pi]) continue
-        if (m.inventory.storage[pi] && m.inventory.storage[pi].amount >= 50) continue
+        if (m.inventory.storage[pi]) continue
         const inPort = inPorts[pi]
         const source = this.activeInput(machineIdx, inPort)
         if (!source) continue
