@@ -1,7 +1,6 @@
-import { Image as KonvaImage, Group, Rect, Text } from 'react-konva'
+import { Image as KonvaImage, Group, Rect } from 'react-konva'
 import type { MachineDefinition, SideImage } from '../types/Machine'
 import { useImage } from '../hooks/useImage'
-import { rotateDir, type Dir } from '../utils/rotation'
 
 interface MachineImageProps {
   definition: MachineDefinition
@@ -11,7 +10,6 @@ interface MachineImageProps {
   opacity?: number
   cellSize: number
   invalid?: boolean
-  showPortLabels?: boolean
 }
 
 interface SideImageProps {
@@ -91,31 +89,6 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
   const centerX = x + width / 2
   const centerY = y + height / 2
 
-  function getPortPosition(portX: number, portY: number, direction: Dir, portType: 'IN' | 'OUT', rot: number): { x: number; y: number; text: string } {
-    const rotatedDir = rotateDir(direction, rot)
-
-    let labelX = portX * cellSize + cellSize / 2 - width / 2
-    let labelY = portY * cellSize + cellSize / 2 - height / 2
-
-    switch (rotatedDir) {
-      case 'N':
-        labelY = portY * cellSize + cellSize / 4 - height / 2
-        break
-      case 'S':
-        labelY = (portY + 1) * cellSize - cellSize / 4 - height / 2
-        break
-      case 'E':
-        labelX = (portX + 1) * cellSize - cellSize / 4 - width / 2
-        break
-      case 'W':
-        labelX = portX * cellSize + cellSize / 4 - width / 2
-        break
-    }
-
-    const prefix = portType === 'IN' ? 'I' : 'O'
-    return { x: labelX, y: labelY, text: `${prefix}${direction}${rotatedDir}` }
-  }
-
   return (
     <>
       <Group
@@ -188,37 +161,16 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
             opacity={0.3}
           />
         )}
-        {showPortLabels && definition.ports.map((port, index) => {
-          const pos = getPortPosition(port.x, port.y, port.direction, port.port, rotation)
-          return (
-            <Text
-              key={`port-label-${index}`}
-              text={pos.text}
-              x={pos.x}
-              y={pos.y}
-              fontSize={12}
-              fontStyle="bold"
-              fill="white"
-              align="center"
-              verticalAlign="middle"
-              width={cellSize}
-              height={cellSize}
-              offsetX={cellSize / 2}
-              offsetY={cellSize / 2}
-            />
-          )
-        })}
+        {gridIconImg && (
+          <KonvaImage
+            image={gridIconImg}
+            x={-cellSize / 2}
+            y={-cellSize / 2}
+            width={cellSize}
+            height={cellSize}
+          />
+        )}
       </Group>
-      {gridIconImg && (
-        <KonvaImage
-          image={gridIconImg}
-          x={centerX - cellSize / 2}
-          y={centerY - cellSize / 2}
-          width={cellSize}
-          height={cellSize}
-          opacity={opacity}
-        />
-      )}
     </>
   )
 }

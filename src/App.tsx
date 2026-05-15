@@ -914,7 +914,7 @@ function App() {
       opacity={0.5}
       cellSize={CELL_SIZE}
       invalid={!isPreviewValid}
-      showPortLabels={true}
+      
     />
   ) : null
 
