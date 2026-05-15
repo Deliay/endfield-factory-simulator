@@ -46,7 +46,7 @@ describe('FactoryEmulator', () => {
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
 
-    it('should pull into buffer when belt already has one in storage', () => {
+    it('should buffer item when belt already has one in storage', () => {
       const emulator = new FactoryEmulator([
         pm('belt', 0, 0),
         pm('belt', 1, 0),
@@ -56,9 +56,9 @@ describe('FactoryEmulator', () => {
 
       emulator.tick()
 
-      // Belt(1,0) had storage[0]=ingot, buffer was empty → pulls ore from upstream
-      // postTick moves buffer[0]=ore to storage[0], overwriting ingot
-      expect(emulator.machines[1].inventory.storage[0]!.id).toBe('ore')
+      // Belt(1,0) had storage[0]=ingot — ore goes into inputBuffer instead
+      expect(emulator.machines[1].inventory.storage[0]!.id).toBe('ingot')
+      expect(emulator.machines[1].inputBuffer[0]!.id).toBe('ore')
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
   })
@@ -420,6 +420,38 @@ describe('FactoryEmulator', () => {
       // Storage_box should have the item back
       expect(emulator.machines[0].inventory.storage[0]).toEqual(itemTest)
       expect(emulator.machines[findBelt(belts, 3, 0)].inventory.storage[0]).toBeNull()
+    })
+  })
+
+  describe('50 items through 2-belt pipeline A→B', () => {
+    it('should transfer 50 items from storage A to B through 2 belts', () => {
+      // A above B, gap of 2 cells filled with belts
+      // A(0,0) OUT:(1,2)S→belt1(1,3)rotate=90→belt2(1,4)rotate=90→B(0,5) IN:(1,0)N
+      // Theoretical: 2 belts + 50 items = 52 ticks
+      const emulator = new FactoryEmulator([
+        pm('storage_box', 0, 0, 0),   // A
+        pm('belt', 1, 3, 90),          // belt1: IN:N(↑), OUT:S(↓)
+        pm('belt', 1, 4, 90),          // belt2: IN:N(↑), OUT:S(↓)
+        pm('storage_box', 0, 5, 0),    // B
+      ])
+      emulator.setTimeScale(0.001)
+
+      emulator.machines[0].inventory.storage[0] = { id: 'ore', amount: 50 }
+
+      const ticksNeeded = 52
+      for (let t = 0; t < ticksNeeded; t++) {
+        emulator.tick()
+      }
+
+      const bTotal = emulator.machines[3].inventory.storage.reduce(
+        (sum, s) => sum + (s ? s.amount : 0), 0
+      )
+      expect(bTotal).toBe(50)
+
+      const aTotal = emulator.machines[0].inventory.storage.reduce(
+        (sum, s) => sum + (s ? s.amount : 0), 0
+      )
+      expect(aTotal).toBe(0)
     })
   })
 

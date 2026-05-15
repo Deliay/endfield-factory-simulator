@@ -105,6 +105,59 @@ machineRegistry.register({
 
 - 不作为工具栏选项显示
 
+### 分流器 (log_splitter)
+```typescript
+{
+  type: 'log_splitter',
+  width: 1, height: 1,
+  ports: [
+    { port: 'IN', x: 0, y: 0, direction: 'N' },
+    { port: 'OUT', x: 0, y: 0, direction: 'E' },
+    { port: 'OUT', x: 0, y: 0, direction: 'W' },
+    { port: 'OUT', x: 0, y: 0, direction: 'S' },
+  ],
+}
+```
+- 尺寸: 1×1 网格
+- 1 输入 (北), 3 输出 (东/西/南)
+- 每次只输出 1 个物品 (inventoryCapacity=1)
+
+### 汇流器 (log_converger)
+```typescript
+{
+  type: 'log_converger',
+  width: 1, height: 1,
+  ports: [
+    { port: 'IN', x: 0, y: 0, direction: 'N' },
+    { port: 'IN', x: 0, y: 0, direction: 'E' },
+    { port: 'IN', x: 0, y: 0, direction: 'W' },
+    { port: 'OUT', x: 0, y: 0, direction: 'S' },
+  ],
+}
+```
+- 尺寸: 1×1 网格
+- 3 输入 (北/东/西), 1 输出 (南)
+
+### 物流桥 (log_connector)
+```typescript
+{
+  type: 'log_connector',
+  width: 1, height: 1,
+  ports: [
+    { port: 'IN', x: 0, y: 0, direction: 'N' },
+    { port: 'IN', x: 0, y: 0, direction: 'E' },
+    { port: 'IN', x: 0, y: 0, direction: 'S' },
+    { port: 'IN', x: 0, y: 0, direction: 'W' },
+    { port: 'OUT', x: 0, y: 0, direction: 'N' },
+    { port: 'OUT', x: 0, y: 0, direction: 'E' },
+    { port: 'OUT', x: 0, y: 0, direction: 'S' },
+    { port: 'OUT', x: 0, y: 0, direction: 'W' },
+  ],
+}
+```
+- 尺寸: 1×1 网格
+- 4 输入 + 4 输出 (全方向)
+
 ### 协议存储箱 (storage_box)
 ```typescript
 {
@@ -475,7 +528,7 @@ interface RuntimeMachine {
 ```
 
 ### FactoryEmulator (默认实现)
-处理所有的 RuntimeMachine 的运作，使用 tick + postTick 两阶段模式。所有机器 msPerRound 均为 2000，每轮所有机器都 tick。
+处理所有的 RuntimeMachine 的运作，使用 tick + postTick 两阶段模式。机器通过 `progress` / `round` / `msPerRound` 驱动机器执行频率，全局 tick 以所有机器中最小的 `msPerRound` 为步进。
 
 0. Machine的定义增加如下字段
 - inventoryCapacity: 传送带为1， storage_box为6
@@ -486,8 +539,8 @@ interface RuntimeMachine {
 {
   inputBuffer: Array<ItemStack | null> // 输入口缓冲区，每 IN port 一个
   msPerRound,
-  progress,
-  round,
+  progress: 0,
+  round: 1,      // 初始为 1，防止 round=0 时 progress>=0 恒真导致首次空转
   inventory: {
     storage: Array<ItemStack | null> // 放置机器时，按照inventory capacity数量初始化为null
   },
@@ -529,20 +582,19 @@ ticking() {
 
 ```js 伪代码
 ticking() {
-  // 如果 buffer 和 storage 都满了则跳过
-  if (this.inventory.storage[0] && this.inputBuffer[0]) return;
+  // buffer 不为空则跳过（待 postTick 清空）
+  if (this.inputBuffer[0]) return;
   const input = ports.filter((p) => p.type === 'IN')[0];
   const { machine, port } = activeInput(input);
-  const item = machine.inventory.take(port, 1);
+  const item = machine.take(port, 1);
   if (item) {
-    if (!this.inventory.storage[0]) {
-      this.inventory.storage[0] = this.inputBuffer[0]; // 刷新缓冲到库存
-    }
     this.inputBuffer[0] = item; // 新物品进入缓冲
   }
+  // 注意: tickMachine 不操作 storage，只填充 buffer
 }
 postTicking() {
-  if (this.inputBuffer[0]) {
+  // 仅当 storage 为空时才从 buffer 移入，防止覆盖已有物品
+  if (this.inputBuffer[0] && !this.inventory.storage[0]) {
     this.inventory.storage[0] = this.inputBuffer[0];
     this.inputBuffer[0] = null;
   }
@@ -611,6 +663,12 @@ take() { return this.inventory.storage.filter((s) => s)[0] || null; }
 
 CASE1: 在(1,1)放置storage_box，初始化物品为 { id: 'item_test', amount: 1}
 - storage_box出入口(3,3)连接传送带(3,4)-(4,4)-(4,3)-(4,2),(4,1),(4,0)-(3,0)，此时storage_box的out和in通过传送带相连接
+- 需要 8 ticks 完成一次循环
+
+CASE2: 50 items 通过 2-belt 管道从 A 传输到 B
+- A(0,0) OUT:(1,2)S → belt1(1,3)rot=90 → belt2(1,4)rot=90 → B(0,5) IN:(1,0)N
+- A 初始 50 个 ore，B 空
+- 理论 ticks: belt 数量 + 物品数量 = 2 + 50 = 52
 - [tick:0]factory第一次ticking，在传送带(3,4)ticking时，从storage_box take 1个 item_test，此时storage_box的storage为空，此时in-port取的物品存放在一个输入口缓冲区里
 - [tick:0:post]: 将物品从缓冲区 写入库存
 - [tick:1] 传送带(4,4)从传送带(3,4)的库存取到物品，进入(4,4)的缓冲区
@@ -644,7 +702,10 @@ src/
 │   └── useImage.ts         # 图片加载 hook
 ├── machines/
 │   ├── belt.ts             # 传送带定义 (belt, belt_corner_ne, belt_corner_en)
-│   └── storage_box.ts      # 协议存储箱定义
+│   ├── storage_box.ts      # 协议存储箱定义
+│   ├── log_splitter.ts     # 分流器定义
+│   ├── log_converger.ts    # 汇流器定义
+│   └── log_connector.ts    # 物流桥定义
 ├── types/
 │   ├── Machine.ts          # 机器类型定义和 Registry, ItemStack
 │   └── Factory.ts          # 工厂类型定义 (PlacedMachine)

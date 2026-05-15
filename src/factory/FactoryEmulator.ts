@@ -27,7 +27,7 @@ export class FactoryEmulator implements IEmulator {
         y: pm.y,
         msPerRound: def.msPerRound,
         progress: 0,
-        round: 0,
+        round: 1,
         inventory: {
           storage: Array.from({ length: def.inventoryCapacity }, () => null),
         },
@@ -68,7 +68,7 @@ export class FactoryEmulator implements IEmulator {
     const m = this.machines[machineIdx]
 
     if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
-      if (m.inputBuffer[0]) {
+      if (m.inputBuffer[0] && !m.inventory.storage[0]) {
         m.inventory.storage[0] = m.inputBuffer[0]
         m.inputBuffer[0] = null
       }
@@ -223,17 +223,14 @@ export class FactoryEmulator implements IEmulator {
     if (!def) return
 
     if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
-      if (m.inventory.storage[0] && m.inputBuffer[0]) return
+      if (m.inputBuffer[0]) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
       const source = this.activeInput(machineIdx, inPort)
       if (!source) return
       const item = this.take(source.machineIndex, source.port, 1)
       if (item) {
-        if (!m.inventory.storage[0]) {
-          m.inventory.storage[0] = m.inputBuffer[0];
-        }
-          m.inputBuffer[0] = item
+        m.inputBuffer[0] = item
       }
       return
     }
