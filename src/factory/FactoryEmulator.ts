@@ -32,6 +32,7 @@ export class FactoryEmulator implements IEmulator {
           storage: Array.from({ length: def.inventoryCapacity }, () => null),
         },
         inputBuffer: Array.from({ length: inPortCount }, () => null),
+        nextOutSlot: 0,
       }
     })
   }
@@ -67,10 +68,24 @@ export class FactoryEmulator implements IEmulator {
   private postTickMachine(machineIdx: number): void {
     const m = this.machines[machineIdx]
 
-    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
       if (m.inputBuffer[0] && !m.inventory.storage[0]) {
         m.inventory.storage[0] = m.inputBuffer[0]
         m.inputBuffer[0] = null
+      }
+      return
+    }
+
+    if (m.type === 'log_splitter') {
+      const bufItem = m.inputBuffer[0]
+      if (!bufItem) return
+      for (let i = 0; i < m.inventory.storage.length; i++) {
+        const slotIdx = (m.nextOutSlot + i) % m.inventory.storage.length
+        if (m.inventory.storage[slotIdx]) continue
+        m.inventory.storage[slotIdx] = bufItem
+        m.inputBuffer[0] = null
+        m.nextOutSlot = (slotIdx + 1) % m.inventory.storage.length
+        return
       }
       return
     }
@@ -217,6 +232,19 @@ export class FactoryEmulator implements IEmulator {
   take(machineIdx: number, port: Port, amount: number): ItemStack | null {
     const m = this.machines[machineIdx]
 
+    if (m.type === 'log_splitter') {
+      const OUT_DIR_TO_SLOT: Record<string, number> = { E: 0, W: 1, S: 2 }
+      const slotIdx = OUT_DIR_TO_SLOT[port.direction]
+      const item = m.inventory.storage[slotIdx]
+      if (!item) return null
+      const taken: ItemStack = { id: item.id, amount: Math.min(amount, item.amount) }
+      item.amount -= taken.amount
+      if (item.amount <= 0) {
+        m.inventory.storage[slotIdx] = null
+      }
+      return taken
+    }
+
     if (m.type === 'log_connector') {
       const OUT_DIR_TO_SLOT: Record<string, number> = { S: 0, W: 1, N: 2, E: 3 }
       const slotIdx = OUT_DIR_TO_SLOT[port.direction]
@@ -247,8 +275,22 @@ export class FactoryEmulator implements IEmulator {
     const def = machineRegistry.get(m.type)
     if (!def) return
 
-    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en' || m.type === 'log_splitter') {
+    if (m.type === 'belt' || m.type === 'belt_corner_ne' || m.type === 'belt_corner_en') {
       if (m.inputBuffer[0]) return
+      const inPort = def.ports.find(p => p.port === 'IN')
+      if (!inPort) return
+      const source = this.activeInput(machineIdx, inPort)
+      if (!source) return
+      const item = this.take(source.machineIndex, source.port, 1)
+      if (item) {
+        m.inputBuffer[0] = item
+      }
+      return
+    }
+
+    if (m.type === 'log_splitter') {
+      if (m.inputBuffer[0]) return
+      if (m.inventory.storage.every(s => s !== null && s.amount >= 50)) return
       const inPort = def.ports.find(p => p.port === 'IN')
       if (!inPort) return
       const source = this.activeInput(machineIdx, inPort)

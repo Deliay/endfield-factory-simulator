@@ -140,12 +140,13 @@ describe('FactoryEmulator', () => {
         pm('log_splitter', 0, 0),
         pm('belt', 0, 1, 90),
       ])
-      emulator.machines[0].inventory.storage[0] = { ...ore }
+      // OUT:S → storage slot 2
+      emulator.machines[0].inventory.storage[2] = { ...ore }
 
       emulator.tick()
 
       expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
-      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+      expect(emulator.machines[0].inventory.storage[2]).toBeNull()
     })
 
     it('should allow downstream belt to pull from splitter via OUT:E', () => {
@@ -153,6 +154,7 @@ describe('FactoryEmulator', () => {
         pm('log_splitter', 0, 0),
         pm('belt', 1, 0),
       ])
+      // OUT:E → storage slot 0
       emulator.machines[0].inventory.storage[0] = { ...ore }
 
       emulator.tick()
@@ -166,30 +168,46 @@ describe('FactoryEmulator', () => {
         pm('log_splitter', 1, 0),
         pm('belt', 0, 0, 180),
       ])
-      emulator.machines[0].inventory.storage[0] = { ...ore }
+      // OUT:W → storage slot 1
+      emulator.machines[0].inventory.storage[1] = { ...ore }
 
       emulator.tick()
 
       expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
-      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
+      expect(emulator.machines[0].inventory.storage[1]).toBeNull()
     })
 
-    it('should propagate item through belt → splitter → belt chain', () => {
+    it('should distribute items round-robin across 3 outputs', () => {
+      // 3 upstream belts feed into converger → splitter → 3 downstream belts
+      // Round-robin order: OUT:E(slot0) → OUT:W(slot1) → OUT:S(slot2)
       const emulator = new FactoryEmulator([
-        pm('belt', 0, 0, 90),
-        pm('log_splitter', 0, 1),
-        pm('belt', 0, 2, 90),
+        pm('belt', 0, -2, 90),    // [0] upstream item1
+        pm('belt', 1, -1, 180),   // [1] upstream item2
+        pm('belt', -1, -1, 0),    // [2] upstream item3
+        pm('log_converger', 0, -1), // [3] converger
+        pm('log_splitter', 0, 0),   // [4] splitter
+        pm('belt', 1, 0, 0),       // [5] downstream E (slot0)
+        pm('belt', -1, 0, 180),    // [6] downstream W (slot1)
+        pm('belt', 0, 1, 90),      // [7] downstream S (slot2)
       ])
-      emulator.machines[0].inventory.storage[0] = { ...ore }
+      emulator.setTimeScale(0.001)
 
-      emulator.tick()
-      // belt(0,0) → splitter(0,1): item now in splitter's storage
-      expect(emulator.machines[1].inventory.storage[0]).toEqual(ore)
+      emulator.machines[0].inventory.storage[0] = { id: 'item_1', amount: 1 }
+      emulator.machines[1].inventory.storage[0] = { id: 'item_2', amount: 1 }
+      emulator.machines[2].inventory.storage[0] = { id: 'item_3', amount: 1 }
 
-      emulator.tick()
-      // splitter(0,1) → belt(0,2): item now in belt(0,2)'s storage
-      expect(emulator.machines[2].inventory.storage[0]).toEqual(ore)
+      for (let t = 0; t < 50; t++) emulator.tick()
+
+      // Each downstream belt gets exactly 1 item via round-robin
+      expect(emulator.machines[5].inventory.storage[0]?.id).toBe('item_1')
+      expect(emulator.machines[6].inventory.storage[0]?.id).toBe('item_2')
+      expect(emulator.machines[7].inventory.storage[0]?.id).toBe('item_3')
+
+      // Splitter storage is empty, upstream belts are empty
+      expect(emulator.machines[4].inventory.storage.every(s => s === null)).toBe(true)
+      expect(emulator.machines[0].inventory.storage[0]).toBeNull()
       expect(emulator.machines[1].inventory.storage[0]).toBeNull()
+      expect(emulator.machines[2].inventory.storage[0]).toBeNull()
     })
   })
 

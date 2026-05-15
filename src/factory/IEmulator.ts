@@ -12,6 +12,7 @@ export interface RuntimeMachine {
     storage: (ItemStack | null)[]
   }
   inputBuffer: (ItemStack | null)[]
+  nextOutSlot: number
 }
 
 export interface IEmulator {
