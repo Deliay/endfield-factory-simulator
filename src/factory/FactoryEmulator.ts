@@ -290,16 +290,12 @@ export class FactoryEmulator implements IEmulator {
       const activeCount = (m._portMask & 1) + ((m._portMask >> 1) & 1) + ((m._portMask >> 2) & 1)
 
       if (activeCount > 1 && port.x !== m.nextOutPortX) {
-        m.nextOutPortX = (m.nextOutPortX + 1) % 3
         return null
       }
     }
 
     const idx = m.inventory.storage.findIndex(s => s !== null)
     if (idx === -1) {
-      if (m.type === 'storage_box') {
-        m.nextOutPortX = (m.nextOutPortX + 1) % 3
-      }
       return null
     }
     const item = m.inventory.storage[idx]

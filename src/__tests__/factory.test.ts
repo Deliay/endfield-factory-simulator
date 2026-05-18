@@ -651,6 +651,117 @@ describe('FactoryEmulator', () => {
       const aTotal = emulator.machines[0].inventory.storage.reduce((s, sl) => s + (sl ? sl.amount : 0), 0)
       expect(aTotal).toBeLessThan(50)
     })
+
+    it('should round-robin across all 3 parallel paths in user layout at (28,28)', () => {
+      const machines: PlacedMachine[] = [
+        { type: 'storage_box', x: 28, y: 28, rotate: 0 },
+        { type: 'storage_box', x: 28, y: 33, rotate: 0 },
+        { type: 'belt', x: 28, y: 31, rotate: 90 },
+        { type: 'belt', x: 28, y: 32, rotate: 90 },
+        { type: 'belt', x: 29, y: 31, rotate: 90 },
+        { type: 'belt', x: 29, y: 32, rotate: 90 },
+        { type: 'belt', x: 30, y: 31, rotate: 90 },
+        { type: 'belt', x: 30, y: 32, rotate: 90 },
+        { type: 'belt_corner_ne', x: 30, y: 36, rotate: 0 },
+        { type: 'belt_corner_ne', x: 31, y: 36, rotate: 270 },
+        { type: 'belt', x: 31, y: 35, rotate: 270 },
+        { type: 'belt', x: 31, y: 34, rotate: 270 },
+        { type: 'belt', x: 31, y: 33, rotate: 270 },
+        { type: 'belt', x: 31, y: 32, rotate: 270 },
+        { type: 'belt', x: 31, y: 31, rotate: 270 },
+        { type: 'belt', x: 31, y: 30, rotate: 270 },
+        { type: 'belt', x: 31, y: 29, rotate: 270 },
+        { type: 'belt', x: 31, y: 28, rotate: 270 },
+        { type: 'belt_corner_ne', x: 31, y: 27, rotate: 180 },
+        { type: 'belt_corner_ne', x: 30, y: 27, rotate: 90 },
+      ]
+
+      const emulator = new FactoryEmulator(machines)
+      emulator.setTimeScale(0.001)
+
+      emulator.machines[0].inventory.storage[0] = { id: 'ore', amount: 50 }
+
+      // 3 parallel paths A→B, 2 belts each → 6 belts total
+      const trackBelts = [[28, 31], [28, 32], [29, 31], [29, 32], [30, 31], [30, 32]]
+      const beltIdxs = trackBelts.map(([x, y]) => {
+        const idx = machines.findIndex(m => m.x === x && m.y === y)
+        if (idx === -1) throw new Error(`Belt at (${x},${y}) not found`)
+        return idx
+      })
+      const beltHadItem = new Map(trackBelts.map(([x, y]) => [`${x},${y}`, false]))
+
+      for (let t = 0; t < 60; t++) {
+        emulator.tick()
+        for (const bi of beltIdxs) {
+          if (emulator.machines[bi].inventory.storage[0] !== null) {
+            beltHadItem.set(`${machines[bi].x},${machines[bi].y}`, true)
+          }
+        }
+      }
+
+      for (const [pos, hadItem] of beltHadItem) {
+        expect(hadItem, `Belt at ${pos} never had an item — items only flow through some paths, not all 3`).toBe(true)
+      }
+
+      const totalInSystem = emulator.machines.reduce((sum, m) => {
+        return sum + m.inventory.storage.reduce((s, slot) => s + (slot ? slot.amount : 0), 0)
+      }, 0)
+      expect(totalInSystem).toBe(50)
+    })
+
+    it('should cycle 1 item through all 3 parallel paths over multiple cycles', () => {
+      const machines: PlacedMachine[] = [
+        { type: 'storage_box', x: 29, y: 28, rotate: 0 },
+        { type: 'storage_box', x: 29, y: 32, rotate: 0 },
+        { type: 'belt', x: 29, y: 31, rotate: 90 },
+        { type: 'belt', x: 30, y: 31, rotate: 90 },
+        { type: 'belt', x: 31, y: 31, rotate: 90 },
+        { type: 'belt_corner_ne', x: 31, y: 35, rotate: 0 },
+        { type: 'belt_corner_ne', x: 32, y: 35, rotate: 270 },
+        { type: 'belt', x: 32, y: 34, rotate: 270 },
+        { type: 'belt', x: 32, y: 33, rotate: 270 },
+        { type: 'belt', x: 32, y: 32, rotate: 270 },
+        { type: 'belt', x: 32, y: 31, rotate: 270 },
+        { type: 'belt', x: 32, y: 30, rotate: 270 },
+        { type: 'belt', x: 32, y: 29, rotate: 270 },
+        { type: 'belt', x: 32, y: 28, rotate: 270 },
+        { type: 'belt_corner_ne', x: 32, y: 27, rotate: 180 },
+        { type: 'belt_corner_ne', x: 31, y: 27, rotate: 90 },
+      ]
+
+      const emulator = new FactoryEmulator(machines)
+      emulator.setTimeScale(0.001)
+
+      emulator.machines[0].inventory.storage[0] = { id: 'ore', amount: 1 }
+
+      // 3 parallel paths A→B, 1 belt each → 3 belts total
+      const trackBelts = [[29, 31], [30, 31], [31, 31]]
+      const beltIdxs = trackBelts.map(([x, y]) => {
+        const idx = machines.findIndex(m => m.x === x && m.y === y)
+        if (idx === -1) throw new Error(`Belt at (${x},${y}) not found`)
+        return idx
+      })
+      const beltHadItem = new Map(trackBelts.map(([x, y]) => [`${x},${y}`, false]))
+
+      // Track which belt gets the item each time it leaves A
+      for (let t = 0; t < 100; t++) {
+        emulator.tick()
+        for (const bi of beltIdxs) {
+          if (emulator.machines[bi].inventory.storage[0] !== null) {
+            beltHadItem.set(`${machines[bi].x},${machines[bi].y}`, true)
+          }
+        }
+      }
+
+      for (const [pos, hadItem] of beltHadItem) {
+        expect(hadItem, `Belt at ${pos} never had the item — round-robin didn't rotate to all 3 paths with 1 item`).toBe(true)
+      }
+
+      const totalInSystem = emulator.machines.reduce((sum, m) => {
+        return sum + m.inventory.storage.reduce((s, slot) => s + (slot ? slot.amount : 0), 0)
+      }, 0)
+      expect(totalInSystem).toBe(1)
+    })
   })
 
   describe('multi-machine chain', () => {
