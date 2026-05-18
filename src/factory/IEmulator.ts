@@ -26,6 +26,8 @@ export interface RuntimeMachine {
   inputBuffer: (ItemStack | null)[]
   nextOutSlot: number
   nextOutPortX: number
+  _portMask?: number
+  _portTick?: number
 }
 
 export interface IEmulator {

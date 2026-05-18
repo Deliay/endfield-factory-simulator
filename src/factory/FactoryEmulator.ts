@@ -278,7 +278,18 @@ export class FactoryEmulator implements IEmulator {
     }
 
     if (m.type === 'storage_box') {
-      if (port.x !== m.nextOutPortX) {
+      if (!m._portMask) m._portMask = 0
+      if (!m._portTick) m._portTick = 0
+      const TICK_DECAY = 5
+      if (m.round - m._portTick > TICK_DECAY) {
+        m._portMask = 1 << port.x
+      } else {
+        m._portMask |= 1 << port.x
+      }
+      m._portTick = m.round
+      const activeCount = (m._portMask & 1) + ((m._portMask >> 1) & 1) + ((m._portMask >> 2) & 1)
+
+      if (activeCount > 1 && port.x !== m.nextOutPortX) {
         m.nextOutPortX = (m.nextOutPortX + 1) % 3
         return null
       }
