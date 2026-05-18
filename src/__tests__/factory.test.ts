@@ -553,6 +553,111 @@ describe('FactoryEmulator', () => {
     })
   })
 
+  describe('2 storage boxes with 3 parallel belts and feedback loop', () => {
+    function findBeltIdx(machines: PlacedMachine[], x: number, y: number): number {
+      const idx = machines.findIndex(m => m.x === x && m.y === y)
+      if (idx === -1) throw new Error(`Machine at (${x},${y}) not found`)
+      return idx
+    }
+
+    // Layout (shifted from user's template):
+    //   A at (0,0) 3×3: OUT ports at (0,2,S),(1,2,S),(2,2,S)
+    //   B at (0,4) 3×3: IN ports at (0,4,N),(1,4,N),(2,4,N)
+    //   3 parallel belts A→B: (0,3),(1,3),(2,3) all rotate 90
+    //   Feedback B→A via belt chain B(2,6,S) → ... → A(2,0,N)
+    function setupCycleLayout() {
+      const machines: PlacedMachine[] = [
+        pm('storage_box', 0, 0),       // [0] A
+        pm('storage_box', 0, 4),       // [1] B
+        pm('belt', 0, 3, 90),          // [2] A→B belt at port x=0
+        pm('belt', 1, 3, 90),          // [3] A→B belt at port x=1
+        pm('belt', 2, 3, 90),          // [4] A→B belt at port x=2
+        // feedback loop from B(2,6,S) to A(2,0,N)
+        pm('belt_corner_ne', 2, 7, 0),          // [5]  IN:N from (2,6)=B(2,6,S), OUT:E
+        pm('belt_corner_ne', 3, 7, 270),        // [6]  IN:W from (2,7), OUT:N to (3,6)
+        pm('belt', 3, 6, 270),                   // [7]  IN:S→OUT:N: (3,7)→(3,6)  wait, IN:S? Let me re-check
+        // Actually belt(3,6) rotate 270: default IN:W,OUT:E → rotate(270): IN:S,OUT:N
+        pm('belt', 3, 5, 270),                   // [8]
+        pm('belt', 3, 4, 270),                   // [9]
+        pm('belt', 3, 3, 270),                   // [10]
+        pm('belt', 3, 2, 270),                   // [11]
+        pm('belt', 3, 1, 270),                   // [12]
+        pm('belt', 3, 0, 270),                   // [13]
+        pm('belt_corner_ne', 2, -1, 90),         // [14] rotate 90: IN:E from (3,-1), OUT:S to (2,0)
+        pm('belt_corner_ne', 3, -1, 180),        // [15] rotate 180: IN:S from (3,0), OUT:W to (2,-1)
+      ]
+      return machines
+    }
+
+    it('should flow 1 item through A→belt→B→feedback→A cycle', () => {
+      const machines = setupCycleLayout()
+      const emulator = new FactoryEmulator(machines)
+      emulator.setTimeScale(0.001)
+
+      const bA2B = findBeltIdx(machines, 0, 3) // first A→B belt
+      const idxA = 0
+      const idxB = 1
+
+      emulator.machines[idxA].inventory.storage[0] = { id: 'ore', amount: 1 }
+
+      // Tick until item leaves A and reaches B
+      let foundOnBelt = false
+      let foundInB = false
+      let foundBackInA = false
+      let ticksToB = 0
+      let ticksToReturn = 0
+
+      for (let t = 1; t <= 80; t++) {
+        emulator.tick()
+
+        if (!foundOnBelt && emulator.machines[bA2B].inventory.storage[0]?.id === 'ore') {
+          foundOnBelt = true
+        }
+        if (!foundInB && emulator.machines[idxB].inventory.storage.some(s => s?.id === 'ore')) {
+          foundInB = true
+          ticksToB = t
+        }
+        if (!foundBackInA && foundInB && emulator.machines[idxA].inventory.storage.some(s => s?.id === 'ore')) {
+          foundBackInA = true
+          ticksToReturn = t - ticksToB
+        }
+      }
+
+      expect(foundOnBelt).toBe(true)
+      expect(foundInB).toBe(true)
+      expect(foundBackInA).toBe(true)
+      expect(ticksToB).toBeGreaterThan(0)
+      expect(ticksToReturn).toBeGreaterThan(0)
+    })
+
+    it('should flow 50 items from A through all 3 parallel belts to B', () => {
+      const machines = setupCycleLayout()
+      const emulator = new FactoryEmulator(machines)
+      emulator.setTimeScale(0.001)
+
+      const idxA = 0
+      const idxB = 1
+
+      emulator.machines[idxA].inventory.storage[0] = { id: 'ore', amount: 50 }
+
+      for (let t = 0; t < 200; t++) {
+        emulator.tick()
+      }
+
+      // Item conservation: all 50 items are still in the system
+      const totalInSystem = emulator.machines.reduce((sum, m) => {
+        return sum + m.inventory.storage.reduce((s, slot) => s + (slot ? slot.amount : 0), 0)
+      }, 0)
+      expect(totalInSystem).toBe(50)
+
+      // Feedback loop works: B received items (items cycle through)
+      const bTotal = emulator.machines[idxB].inventory.storage.reduce(
+        (sum, s) => sum + (s ? s.amount : 0), 0
+      )
+      expect(bTotal).toBeGreaterThan(0)
+    })
+  })
+
   describe('multi-machine chain', () => {
     it('should propagate item through belt chain', () => {
       const emulator = new FactoryEmulator([

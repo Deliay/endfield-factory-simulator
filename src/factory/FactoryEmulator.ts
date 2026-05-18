@@ -27,10 +27,10 @@ export function restoreRuntimeState(machines: RuntimeMachine[], snapshot: Runtim
     m.round = s.round
     m.nextOutSlot = s.nextOutSlot
     for (let i = 0; i < Math.min(m.inventory.storage.length, s.storage.length); i++) {
-      m.inventory.storage[i] = s.storage[i] ? { ...s.storage[i] } : null
+      m.inventory.storage[i] = s.storage[i] ? { ...s.storage[i]! } : null
     }
     for (let i = 0; i < Math.min(m.inputBuffer.length, s.inputBuffer.length); i++) {
-      m.inputBuffer[i] = s.inputBuffer[i] ? { ...s.inputBuffer[i] } : null
+      m.inputBuffer[i] = s.inputBuffer[i] ? { ...s.inputBuffer[i]! } : null
     }
   }
 }
