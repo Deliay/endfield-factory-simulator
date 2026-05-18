@@ -10,6 +10,7 @@ interface MachineImageProps {
   opacity?: number
   cellSize: number
   invalid?: boolean
+  isSelected?: boolean
 }
 
 interface SideImageProps {
@@ -78,7 +79,7 @@ function SideImageRenderer({ side, sideImg, machineWidth, machineHeight, cellSiz
   )
 }
 
-export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize, invalid, showPortLabels }: MachineImageProps) {
+export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize, invalid, isSelected }: MachineImageProps) {
   const backgroundUrl = definition.backgroundImg
   const backgroundImg = useImage(backgroundUrl || null)
   const gridIconUrl = definition.gridIcon
@@ -159,6 +160,17 @@ export function MachineImage({ definition, x, y, rotation, opacity = 1, cellSize
             height={height}
             fill="red"
             opacity={0.3}
+          />
+        )}
+        {isSelected && (
+          <Rect
+            x={-width / 2}
+            y={-height / 2}
+            width={width}
+            height={height}
+            fill="rgba(0, 150, 255, 0.25)"
+            stroke="#0088ff"
+            strokeWidth={3}
           />
         )}
         {gridIconImg && (

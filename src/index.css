@@ -157,6 +157,30 @@ code {
   background: #0077dd;
 }
 
+.tool-button.danger {
+  background: #cc3333;
+  border-color: #ff4444;
+}
+
+.tool-button.danger:hover {
+  background: #dd4444;
+}
+
+.tool-button.danger:disabled {
+  background: #442222;
+  border-color: #663333;
+  cursor: default;
+  opacity: 0.5;
+}
+
+.multi-select-info {
+  color: #0088ff;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 0 8px;
+  white-space: nowrap;
+}
+
 .tool-icon {
   width: 20px;
   height: 20px;

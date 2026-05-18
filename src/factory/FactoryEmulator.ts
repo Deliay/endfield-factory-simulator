@@ -1,8 +1,39 @@
 import { machineRegistry, type Port, type ItemStack } from '../types/Machine'
 import type { PlacedMachine } from '../types/Factory'
 import { rotateDir, rotatePortPosition, type Dir } from '../utils/rotation'
-import type { IEmulator, RuntimeMachine } from './IEmulator'
+import type { IEmulator, RuntimeMachine, RuntimeStateSnapshot } from './IEmulator'
 import { emulatorRegistry } from './emulatorRegistry'
+
+export function snapshotRuntimeState(machines: RuntimeMachine[]): RuntimeStateSnapshot[] {
+  return machines.map(m => ({
+    x: m.x,
+    y: m.y,
+    type: m.type,
+    progress: m.progress,
+    round: m.round,
+    storage: m.inventory.storage.map(s => s ? { ...s } : null),
+    inputBuffer: m.inputBuffer.map(s => s ? { ...s } : null),
+    nextOutSlot: m.nextOutSlot,
+  }))
+}
+
+export function restoreRuntimeState(machines: RuntimeMachine[], snapshot: RuntimeStateSnapshot[]): void {
+  const map = new Map(snapshot.map(s => [`${s.x},${s.y}`, s]))
+  for (const m of machines) {
+    const key = `${m.x},${m.y}`
+    const s = map.get(key)
+    if (!s || s.type !== m.type) continue
+    m.progress = s.progress
+    m.round = s.round
+    m.nextOutSlot = s.nextOutSlot
+    for (let i = 0; i < Math.min(m.inventory.storage.length, s.storage.length); i++) {
+      m.inventory.storage[i] = s.storage[i] ? { ...s.storage[i] } : null
+    }
+    for (let i = 0; i < Math.min(m.inputBuffer.length, s.inputBuffer.length); i++) {
+      m.inputBuffer[i] = s.inputBuffer[i] ? { ...s.inputBuffer[i] } : null
+    }
+  }
+}
 
 const DIR_DX: Record<Dir, number> = { N: 0, E: 1, S: 0, W: -1 }
 const DIR_DY: Record<Dir, number> = { N: -1, E: 0, S: 1, W: 0 }
@@ -153,20 +184,6 @@ export class FactoryEmulator implements IEmulator {
 
   setTimeScale(scale: number): void {
     this.simulatorTimeScale = Math.max(0.001, Math.min(scale, 2))
-  }
-
-  private getMachineCells(m: RuntimeMachine): { x: number; y: number }[] {
-    const def = machineRegistry.get(m.type)
-    if (!def) return []
-    const w = m.rotate % 180 === 0 ? def.width : def.height
-    const h = m.rotate % 180 === 0 ? def.height : def.width
-    const cells: { x: number; y: number }[] = []
-    for (let dx = 0; dx < w; dx++) {
-      for (let dy = 0; dy < h; dy++) {
-        cells.push({ x: m.x + dx, y: m.y + dy })
-      }
-    }
-    return cells
   }
 
   private isCellOccupiedBy(x: number, y: number, excludeIdx: number): number | null {

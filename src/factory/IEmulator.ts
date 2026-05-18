@@ -1,5 +1,16 @@
 import type { ItemStack } from '../types/Machine'
 
+export interface RuntimeStateSnapshot {
+  x: number
+  y: number
+  type: string
+  progress: number
+  round: number
+  storage: (ItemStack | null)[]
+  inputBuffer: (ItemStack | null)[]
+  nextOutSlot: number
+}
+
 export interface RuntimeMachine {
   type: string
   rotate: number

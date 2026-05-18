@@ -9,9 +9,10 @@ import { ToolButton } from './components/ToolButton'
 import { StorageDialog } from './components/StorageDialog'
 import { ImportExportDialog } from './components/ImportExportDialog'
 import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
-import { FactoryEmulator } from './factory/FactoryEmulator'
 import { emulatorRegistry } from './factory/emulatorRegistry'
 import type { IEmulator } from './factory/IEmulator'
+import { snapshotRuntimeState, restoreRuntimeState } from './factory/FactoryEmulator'
+import './factory/FactoryEmulator'
 import './machines/belt'
 import './machines/storage_box'
 import './machines/log_splitter'
@@ -43,6 +44,21 @@ function getOccupiedCellsByMachine(pm: PlacedMachine): Set<string> {
   const def = machineRegistry.get(pm.type)
   if (!def) return new Set()
   return getOccupiedCells(def, pm.x, pm.y, pm.rotate)
+}
+
+function findMachineAt(x: number, y: number, machines: PlacedMachine[]): number {
+  return machines.findIndex(m => {
+    const def = machineRegistry.get(m.type)
+    if (!def) return false
+    const w = m.rotate % 180 === 0 ? def.width : def.height
+    const h = m.rotate % 180 === 0 ? def.height : def.width
+    for (let dx = 0; dx < w; dx++) {
+      for (let dy = 0; dy < h; dy++) {
+        if (m.x + dx === x && m.y + dy === y) return true
+      }
+    }
+    return false
+  })
 }
 
 function canPlaceMachine(
@@ -274,13 +290,11 @@ export function findPath(
       else for (let x = startX; x >= endX; x--) p.push({ x, y: startY })
       candidates.push(p)
     }
-    const corner1 = { x: endX, y: startY }
     candidates.push([
       { x: startX, y: startY },
       ...(startX < endX ? range(startX + 1, endX) : range(startX - 1, endX, -1)).map(x => ({ x, y: startY })),
       ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: endX, y })),
     ])
-    const corner2 = { x: startX, y: endY }
     candidates.push([
       { x: startX, y: startY },
       ...(startY < endY ? range(startY + 1, endY) : range(startY - 1, endY, -1)).map(y => ({ x: startX, y })),
@@ -467,7 +481,9 @@ type AppAction =
   | { type: 'BELT_SET_START'; pos: { x: number; y: number }; dir: Dir }
   | { type: 'BELT_PLACE'; x: number; y: number }
   | { type: 'PLACE_MACHINE'; machineType: string; rotate: number; x: number; y: number }
+  | { type: 'REPLACE_MACHINE'; index: number; machineType: string; rotate: number }
   | { type: 'RESET_BELT' }
+  | { type: 'DELETE_MACHINES'; indices: number[] }
   | { type: 'LOAD_FACTORY'; machines: PlacedMachine[] }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -518,6 +534,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ],
       }
     }
+    case 'REPLACE_MACHINE': {
+      return {
+        ...state,
+        machines: state.machines.map((m, i) =>
+          i === action.index
+            ? { type: action.machineType, rotate: action.rotate, x: m.x, y: m.y }
+            : m
+        ),
+      }
+    }
+    case 'DELETE_MACHINES': {
+      const indicesSet = new Set(action.indices)
+      return {
+        ...state,
+        machines: state.machines.filter((_, i) => !indicesSet.has(i)),
+        beltStartPos: null,
+        beltStartDir: null,
+      }
+    }
     case 'RESET_BELT':
       return { ...state, beltStartPos: null, beltStartDir: null }
     case 'LOAD_FACTORY':
@@ -549,7 +584,15 @@ function App() {
   const prevItemMapRef = useRef<Map<string, string | null>>(new Map())
   const tickIntervalRef = useRef(2000)
   const animFrameRef = useRef<number | null>(null)
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([])
+  const mouseDownTimeRef = useRef(0)
+  const multiSelectModeRef = useRef(false)
+  const selectedIndicesRef = useRef<number[]>([])
   const [, forceUpdate] = useReducer(x => x + 1, 0)
+
+  multiSelectModeRef.current = multiSelectMode
+  selectedIndicesRef.current = selectedIndices
 
   const allMachines = machineRegistry.getAll()
 
@@ -563,6 +606,11 @@ function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (multiSelectModeRef.current) {
+          setMultiSelectMode(false)
+          setSelectedIndices([])
+          return
+        }
         setPlacingMachine(null)
         setPreviewPosition(null)
         dispatch({ type: 'RESET_BELT' })
@@ -571,11 +619,40 @@ function App() {
         if (stageRef.current) {
           stageRef.current.container().style.cursor = 'default'
         }
+        return
+      }
+      if (e.key === 'x' || e.key === 'X') {
+        if (multiSelectModeRef.current) {
+          setMultiSelectMode(false)
+          setSelectedIndices([])
+        } else {
+          setPlacingMachine(null)
+          setPreviewPosition(null)
+          dispatch({ type: 'RESET_BELT' })
+          setBeltEndPos(null)
+          setBeltStartPreview(null)
+          if (stageRef.current) {
+            stageRef.current.container().style.cursor = 'default'
+          }
+          setMultiSelectMode(true)
+          setSelectedIndices([])
+        }
+        return
+      }
+      if ((e.key === 'f' || e.key === 'F') && multiSelectModeRef.current) {
+        const indices = selectedIndicesRef.current
+        if (indices.length > 0) {
+          dispatch({ type: 'DELETE_MACHINES', indices: [...indices] })
+          setSelectedIndices([])
+          setMultiSelectMode(false)
+        }
+        return
       }
       if (e.key === 'r' || e.key === 'R') {
         if (placingMachine) {
           setPlacingRotation(prev => (prev + 90) % 360)
         }
+        return
       }
       if (e.key === 'e' || e.key === 'E') {
         setPlacingMachine('belt')
@@ -586,6 +663,7 @@ function App() {
         if (stageRef.current) {
           stageRef.current.container().focus()
         }
+        return
       }
     }
 
@@ -609,7 +687,13 @@ function App() {
   useEffect(() => {
     const entry = emulatorRegistry.get(emulatorType)
     if (!entry) return
+
+    const snapshot = emulatorRef.current ? snapshotRuntimeState(emulatorRef.current.machines) : []
+
     const emulator = new entry.ctor(state.machines)
+
+    restoreRuntimeState(emulator.machines, snapshot)
+
     emulatorRef.current = emulator
 
     animItemsRef.current.clear()
@@ -790,6 +874,18 @@ function App() {
     stage.batchDraw()
   }
 
+  const handleMouseDown = () => {
+    if (placingMachine) return
+    mouseDownTimeRef.current = Date.now()
+  }
+
+  const handleMultiSelectPack = () => {
+    if (selectedIndices.length === 0) return
+    dispatch({ type: 'DELETE_MACHINES', indices: selectedIndices })
+    setSelectedIndices([])
+    setMultiSelectMode(false)
+  }
+
   const handleSimToggle = () => {
     setSimRunning(prev => !prev)
   }
@@ -807,6 +903,10 @@ function App() {
   }
 
   const handleSelectMachine = (type: string) => {
+    if (multiSelectMode) {
+      setMultiSelectMode(false)
+      setSelectedIndices([])
+    }
     setPlacingMachine(type)
     setPreviewPosition(null)
     setPlacingRotation(0)
@@ -894,6 +994,29 @@ function App() {
       if (!placingMachine && previewPosition && stageRef.current) {
         const x = previewPosition.x
         const y = previewPosition.y
+
+        // Long press detection: check elapsed time from mousedown
+        const elapsed = mouseDownTimeRef.current > 0 ? Date.now() - mouseDownTimeRef.current : 0
+        if (elapsed >= 500 && !multiSelectMode) {
+          const idx = findMachineAt(x, y, state.machines)
+          if (idx !== -1) {
+            setMultiSelectMode(true)
+            setSelectedIndices([idx])
+            return
+          }
+        }
+
+        if (multiSelectMode) {
+          const idx = findMachineAt(x, y, state.machines)
+          if (idx !== -1) {
+            setSelectedIndices(prev => {
+              if (prev.includes(idx)) return prev.filter(i => i !== idx)
+              return [...prev, idx]
+            })
+          }
+          return
+        }
+
         const clickedMachine = state.machines.findIndex(
           m => (m.type === 'storage_box' || m.type === 'log_splitter' || m.type === 'log_converger' || m.type === 'log_connector') && (() => {
             const def = machineRegistry.get(m.type)
@@ -915,10 +1038,10 @@ function App() {
       return
     }
 
-    if (placingMachine === 'belt') {
-      const x = previewPosition.x
-      const y = previewPosition.y
+    const x = previewPosition.x
+    const y = previewPosition.y
 
+    if (placingMachine === 'belt') {
       if (!state.beltStartPos) {
         const existingBelt = state.machines.find(
           m => m.x === x && m.y === y && (m.type === 'belt' || m.type.startsWith('belt_corner'))
@@ -956,6 +1079,17 @@ function App() {
             stageRef.current.container().style.cursor = 'default'
           }
         }
+      }
+      return
+    }
+
+    const existingIdx = findMachineAt(x, y, state.machines)
+    if (existingIdx !== -1) {
+      dispatch({ type: 'REPLACE_MACHINE', index: existingIdx, machineType: placingMachine, rotate: placingRotation })
+      setPlacingMachine(null)
+      setPreviewPosition(null)
+      if (stageRef.current) {
+        stageRef.current.container().style.cursor = 'default'
       }
       return
     }
@@ -1028,7 +1162,7 @@ function App() {
         y={y}
         rotation={placedMachine.rotate}
         cellSize={CELL_SIZE}
-        showPortLabels={false}
+        isSelected={selectedIndices.includes(index)}
       />
     )
   })
@@ -1147,8 +1281,9 @@ function App() {
         ref={stageRef}
         width={dimensions.width}
         height={dimensions.height}
-        draggable={!placingMachine}
+        draggable={!placingMachine && !multiSelectMode}
         onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onClick={handleClick}
       >
@@ -1172,7 +1307,21 @@ function App() {
         <button className="tool-button" onClick={() => setImportExportDialog('export')}>
           导出
         </button>
-        {allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
+        {multiSelectMode && (
+          <>
+            <span className="multi-select-info">
+              多选模式 ({selectedIndices.length})
+            </span>
+            <button
+              className="tool-button danger"
+              onClick={handleMultiSelectPack}
+              disabled={selectedIndices.length === 0}
+            >
+              收纳 (F)
+            </button>
+          </>
+        )}
+        {!multiSelectMode && allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
           <ToolButton
             key={machine.type}
             definition={machine}
