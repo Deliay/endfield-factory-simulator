@@ -90,6 +90,20 @@ function getMachineCells(pm: PlacedMachine): Array<{ x: number; y: number }> {
 
 const DIR_OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
 
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+}
+
+interface AnimItem {
+  id: string
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  startTime: number
+  duration: number
+}
+
 export function findAdjacentOutPort(
   targetX: number, targetY: number,
   existing: PlacedMachine[],
@@ -526,6 +540,11 @@ function App() {
   const [storageDialog, setStorageDialog] = useState<{ machineIdx: number; storage: ({ id: string; amount: number } | null)[] } | null>(null)
   const [emulatorType, setEmulatorType] = useState('default')
   const emulatorRef = useRef<IEmulator | null>(null)
+  const animItemsRef = useRef<Map<string, AnimItem>>(new Map())
+  const prevItemMapRef = useRef<Map<string, string | null>>(new Map())
+  const tickIntervalRef = useRef(2000)
+  const animFrameRef = useRef<number | null>(null)
+  const [, forceUpdate] = useReducer(x => x + 1, 0)
 
   const allMachines = machineRegistry.getAll()
 
@@ -587,8 +606,47 @@ function App() {
     if (!entry) return
     const emulator = new entry.ctor(state.machines)
     emulatorRef.current = emulator
+
+    animItemsRef.current.clear()
+    prevItemMapRef.current = new Map()
+
+    const minMs = Math.min(...emulator.machines.map(m => m.msPerRound), Infinity)
+    tickIntervalRef.current = isFinite(minMs) ? minMs * simTimeScaleRef.current : 2000
+
     emulator.onTick = (items) => {
-      setBeltItems(new Map(items))
+      const prevMap = prevItemMapRef.current
+      const newItemMap = new Map(items)
+      const anims = animItemsRef.current
+      const now = performance.now()
+      const duration = tickIntervalRef.current * 0.85
+
+      for (const [cellKey, itemId] of newItemMap) {
+        if (!itemId) continue
+        for (const [prevKey, prevId] of prevMap) {
+          if (prevId === itemId && prevKey !== cellKey) {
+            const [fx, fy] = prevKey.split(',').map(Number)
+            const [tx, ty] = cellKey.split(',').map(Number)
+            if (Math.abs(tx - fx) + Math.abs(ty - fy) <= 1) {
+              anims.set(itemId, {
+                id: itemId,
+                fromX: fx, fromY: fy,
+                toX: tx, toY: ty,
+                startTime: now,
+                duration,
+              })
+            }
+            break
+          }
+        }
+      }
+
+      const currentIds = new Set(newItemMap.values())
+      for (const [itemId] of anims) {
+        if (!currentIds.has(itemId)) anims.delete(itemId)
+      }
+
+      prevItemMapRef.current = newItemMap
+      setBeltItems(newItemMap)
     }
     setBeltItems(new Map(emulator.getItemMap())) // eslint-disable-line react-hooks/set-state-in-effect
     if (simRunningRef.current) {
@@ -612,8 +670,39 @@ function App() {
   }, [simRunning, simTimeScale])
 
   useEffect(() => {
+    const emulator = emulatorRef.current
+    if (!emulator) return
+    const minMs = Math.min(...emulator.machines.map(m => m.msPerRound), Infinity)
+    tickIntervalRef.current = isFinite(minMs) ? minMs * simTimeScale : 2000
+  }, [simTimeScale])
+
+  useEffect(() => {
     return () => {
       emulatorRef.current?.stop()
+    }
+  }, [])
+
+  useEffect(() => {
+    let running = true
+    const loop = () => {
+      if (!running) return
+      const anims = animItemsRef.current
+      const now = performance.now()
+      let changed = false
+      for (const [itemId, anim] of anims) {
+        if (now - anim.startTime >= anim.duration) {
+          anims.delete(itemId)
+          changed = true
+        }
+      }
+      if (anims.size > 0) changed = true
+      if (changed) forceUpdate()
+      animFrameRef.current = requestAnimationFrame(loop)
+    }
+    animFrameRef.current = requestAnimationFrame(loop)
+    return () => {
+      running = false
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
     }
   }, [])
 
@@ -941,12 +1030,23 @@ function App() {
     const cellKey = `${m.x},${m.y}`
     const itemId = beltItems.get(cellKey)
     if (!itemId) return null
+    const anim = animItemsRef.current.get(itemId)
+    let displayX = m.x
+    let displayY = m.y
+    if (anim) {
+      const now = performance.now()
+      const elapsed = now - anim.startTime
+      const t = Math.min(1, elapsed / anim.duration)
+      const eased = easeInOutQuad(t)
+      displayX = anim.fromX + (anim.toX - anim.fromX) * eased
+      displayY = anim.fromY + (anim.toY - anim.fromY) * eased
+    }
     return (
       <>
         <Rect
           key={`belt-item-bg-${idx}`}
-          x={offsetX + m.x * CELL_SIZE + CELL_SIZE / 4}
-          y={offsetY + m.y * CELL_SIZE + CELL_SIZE / 4}
+          x={offsetX + displayX * CELL_SIZE + CELL_SIZE / 4}
+          y={offsetY + displayY * CELL_SIZE + CELL_SIZE / 4}
           width={CELL_SIZE / 2}
           height={CELL_SIZE / 2}
           fill="#ffcc00"
@@ -957,8 +1057,8 @@ function App() {
         />
         <Text
           key={`belt-item-${idx}`}
-          x={offsetX + m.x * CELL_SIZE}
-          y={offsetY + m.y * CELL_SIZE}
+          x={offsetX + displayX * CELL_SIZE}
+          y={offsetY + displayY * CELL_SIZE}
           width={CELL_SIZE}
           height={CELL_SIZE}
           text={itemId}
