@@ -90,8 +90,8 @@ function getMachineCells(pm: PlacedMachine): Array<{ x: number; y: number }> {
 
 const DIR_OPPOSITE: Record<Dir, Dir> = { N: 'S', E: 'W', S: 'N', W: 'E' }
 
-function easeInOutQuad(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+function easeLinear(t: number): number {
+  return t
 }
 
 interface AnimItem {
@@ -608,7 +608,8 @@ function App() {
     emulatorRef.current = emulator
 
     animItemsRef.current.clear()
-    prevItemMapRef.current = new Map()
+    const initialMap = new Map(emulator.getItemMap())
+    prevItemMapRef.current = initialMap
 
     const minMs = Math.min(...emulator.machines.map(m => m.msPerRound), Infinity)
     tickIntervalRef.current = isFinite(minMs) ? minMs * simTimeScaleRef.current : 2000
@@ -618,37 +619,74 @@ function App() {
       const newItemMap = new Map(items)
       const anims = animItemsRef.current
       const now = performance.now()
-      const duration = tickIntervalRef.current * 0.85
 
       for (const [cellKey, itemId] of newItemMap) {
         if (!itemId) continue
         for (const [prevKey, prevId] of prevMap) {
           if (prevId === itemId && prevKey !== cellKey) {
-            const [fx, fy] = prevKey.split(',').map(Number)
             const [tx, ty] = cellKey.split(',').map(Number)
-            if (Math.abs(tx - fx) + Math.abs(ty - fy) <= 1) {
-              anims.set(itemId, {
-                id: itemId,
-                fromX: fx, fromY: fy,
-                toX: tx, toY: ty,
-                startTime: now,
-                duration,
-              })
+
+            let fromX = -1
+            let fromY = -1
+
+            const beltMachine = state.machines.find(
+              m => m.x === tx && m.y === ty && (m.type === 'belt' || m.type.startsWith('belt_corner'))
+            )
+            if (beltMachine) {
+              const def = machineRegistry.get(beltMachine.type)
+              if (def) {
+                const inPort = def.ports.find(p => p.port === 'IN')
+                if (inPort) {
+                  const inDir = rotateDir(inPort.direction, beltMachine.rotate)
+                  fromX = tx + DIR_DX[inDir]
+                  fromY = ty + DIR_DY[inDir]
+                }
+                const outPort = def.ports.find(p => p.port === 'OUT')
+                if (outPort) {
+                  const outDir = rotateDir(outPort.direction, beltMachine.rotate)
+                  const feedX = tx + DIR_DX[outDir]
+                  const feedY = ty + DIR_DY[outDir]
+                  const hasDownstream = state.machines.some(m => {
+                    if (m.x === tx && m.y === ty) return false
+                    const mDef = machineRegistry.get(m.type)
+                    if (!mDef) return false
+                    return getOccupiedCellsByMachine(m).has(`${feedX},${feedY}`)
+                  })
+                  if (!hasDownstream) break
+                }
+              }
             }
+
+            if (fromX === -1) {
+              const [fx, fy] = prevKey.split(',').map(Number)
+              fromX = fx
+              fromY = fy
+            }
+
+            const destMachine = emulator.machines.find(m => m.x === tx && m.y === ty)
+            const machineDuration = (destMachine ? destMachine.msPerRound : tickIntervalRef.current) * simTimeScaleRef.current * 0.95
+
+            anims.set(cellKey, {
+              id: itemId,
+              fromX, fromY,
+              toX: tx, toY: ty,
+              startTime: now,
+              duration: machineDuration,
+            })
             break
           }
         }
       }
 
-      const currentIds = new Set(newItemMap.values())
-      for (const [itemId] of anims) {
-        if (!currentIds.has(itemId)) anims.delete(itemId)
+      for (const [cellKey] of anims) {
+        const stillThere = newItemMap.get(cellKey)
+        if (!stillThere) anims.delete(cellKey)
       }
 
       prevItemMapRef.current = newItemMap
       setBeltItems(newItemMap)
     }
-    setBeltItems(new Map(emulator.getItemMap())) // eslint-disable-line react-hooks/set-state-in-effect
+    setBeltItems(initialMap) // eslint-disable-line react-hooks/set-state-in-effect
     if (simRunningRef.current) {
       emulator.setTimeScale(simTimeScaleRef.current)
       emulator.start()
@@ -688,15 +726,17 @@ function App() {
       if (!running) return
       const anims = animItemsRef.current
       const now = performance.now()
-      let changed = false
-      for (const [itemId, anim] of anims) {
-        if (now - anim.startTime >= anim.duration) {
-          anims.delete(itemId)
-          changed = true
+      if (anims.size > 0) {
+        let changed = false
+        for (const [key, anim] of anims) {
+          if (now - anim.startTime >= anim.duration) {
+            anims.delete(key)
+            changed = true
+          }
         }
+        if (anims.size > 0) changed = true
+        if (changed) forceUpdate()
       }
-      if (anims.size > 0) changed = true
-      if (changed) forceUpdate()
       animFrameRef.current = requestAnimationFrame(loop)
     }
     animFrameRef.current = requestAnimationFrame(loop)
@@ -1030,14 +1070,14 @@ function App() {
     const cellKey = `${m.x},${m.y}`
     const itemId = beltItems.get(cellKey)
     if (!itemId) return null
-    const anim = animItemsRef.current.get(itemId)
+    const anim = animItemsRef.current.get(cellKey)
     let displayX = m.x
     let displayY = m.y
     if (anim) {
       const now = performance.now()
       const elapsed = now - anim.startTime
       const t = Math.min(1, elapsed / anim.duration)
-      const eased = easeInOutQuad(t)
+      const eased = easeLinear(t)
       displayX = anim.fromX + (anim.toX - anim.fromX) * eased
       displayY = anim.fromY + (anim.toY - anim.fromY) * eased
     }
@@ -1159,12 +1199,14 @@ function App() {
           machineIdx={storageDialog.machineIdx}
           initialStorage={storageDialog.storage}
           emulatorRef={emulatorRef}
-          onClose={() => {
-            if (emulatorRef.current) {
-              setBeltItems(new Map(emulatorRef.current.getItemMap()))
-            }
-            setStorageDialog(null)
-          }}
+           onClose={() => {
+             if (emulatorRef.current) {
+               const items = new Map(emulatorRef.current.getItemMap())
+               setBeltItems(items)
+               prevItemMapRef.current = items
+             }
+             setStorageDialog(null)
+           }}
         />
       )}
 
