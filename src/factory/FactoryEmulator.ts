@@ -14,6 +14,7 @@ export function snapshotRuntimeState(machines: RuntimeMachine[]): RuntimeStateSn
     storage: m.inventory.storage.map(s => s ? { ...s } : null),
     inputBuffer: m.inputBuffer.map(s => s ? { ...s } : null),
     nextOutSlot: m.nextOutSlot,
+    nextOutPortX: m.nextOutPortX,
   }))
 }
 
@@ -26,6 +27,7 @@ export function restoreRuntimeState(machines: RuntimeMachine[], snapshot: Runtim
     m.progress = s.progress
     m.round = s.round
     m.nextOutSlot = s.nextOutSlot
+    m.nextOutPortX = s.nextOutPortX
     for (let i = 0; i < Math.min(m.inventory.storage.length, s.storage.length); i++) {
       m.inventory.storage[i] = s.storage[i] ? { ...s.storage[i]! } : null
     }
@@ -64,6 +66,7 @@ export class FactoryEmulator implements IEmulator {
         },
         inputBuffer: Array.from({ length: inPortCount }, () => null),
         nextOutSlot: 0,
+        nextOutPortX: 0,
       }
     })
   }
@@ -274,14 +277,29 @@ export class FactoryEmulator implements IEmulator {
       return taken
     }
 
+    if (m.type === 'storage_box') {
+      if (port.x !== m.nextOutPortX) {
+        m.nextOutPortX = (m.nextOutPortX + 1) % 3
+        return null
+      }
+    }
+
     const idx = m.inventory.storage.findIndex(s => s !== null)
-    if (idx === -1) return null
+    if (idx === -1) {
+      if (m.type === 'storage_box') {
+        m.nextOutPortX = (m.nextOutPortX + 1) % 3
+      }
+      return null
+    }
     const item = m.inventory.storage[idx]
     if (!item) return null
     const taken: ItemStack = { id: item.id, amount: Math.min(amount, item.amount) }
     item.amount -= taken.amount
     if (item.amount <= 0) {
       m.inventory.storage[idx] = null
+    }
+    if (m.type === 'storage_box') {
+      m.nextOutPortX = (m.nextOutPortX + 1) % 3
     }
     return taken
   }

@@ -9,6 +9,7 @@ export interface RuntimeStateSnapshot {
   storage: (ItemStack | null)[]
   inputBuffer: (ItemStack | null)[]
   nextOutSlot: number
+  nextOutPortX: number
 }
 
 export interface RuntimeMachine {
@@ -24,6 +25,7 @@ export interface RuntimeMachine {
   }
   inputBuffer: (ItemStack | null)[]
   nextOutSlot: number
+  nextOutPortX: number
 }
 
 export interface IEmulator {

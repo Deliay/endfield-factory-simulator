@@ -468,53 +468,53 @@ describe('FactoryEmulator', () => {
 
     it('tick 0: belt(3,4) pulls from storage_box', () => {
       const { emulator, belts } = setupCase1()
-      emulator.tick()
+      // Round-robin delay: belt(port.x=2) served after 3 ticks
+      for (let t = 0; t < 3; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 3, 4)].inventory.storage[0]).toEqual(itemTest)
       expect(emulator.machines[0].inventory.storage[0]).toBeNull()
     })
 
     it('tick 1: item moves to belt(4,4)', () => {
       const { emulator, belts } = setupCase1()
-      emulator.tick()
-      emulator.tick()
+      for (let t = 0; t < 4; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 4, 4)].inventory.storage[0]).toEqual(itemTest)
       expect(emulator.machines[findBelt(belts, 3, 4)].inventory.storage[0]).toBeNull()
     })
 
     it('tick 2: item moves to belt(4,3)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 3; t++) emulator.tick()
+      for (let t = 0; t < 5; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 4, 3)].inventory.storage[0]).toEqual(itemTest)
       expect(emulator.machines[findBelt(belts, 4, 4)].inventory.storage[0]).toBeNull()
     })
 
     it('tick 3: item moves to belt(4,2)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 4; t++) emulator.tick()
+      for (let t = 0; t < 6; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 4, 2)].inventory.storage[0]).toEqual(itemTest)
     })
 
     it('tick 4: item moves to belt(4,1)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 5; t++) emulator.tick()
+      for (let t = 0; t < 7; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 4, 1)].inventory.storage[0]).toEqual(itemTest)
     })
 
     it('tick 5: item moves to belt(4,0)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 6; t++) emulator.tick()
+      for (let t = 0; t < 8; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 4, 0)].inventory.storage[0]).toEqual(itemTest)
     })
 
     it('tick 6: item moves to belt(3,0)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 7; t++) emulator.tick()
+      for (let t = 0; t < 9; t++) emulator.tick()
       expect(emulator.machines[findBelt(belts, 3, 0)].inventory.storage[0]).toEqual(itemTest)
     })
 
     it('tick 7: storage_box pulls item back from belt(3,0)', () => {
       const { emulator, belts } = setupCase1()
-      for (let t = 0; t < 8; t++) emulator.tick()
+      for (let t = 0; t < 10; t++) emulator.tick()
       // Storage_box should have the item back
       expect(emulator.machines[0].inventory.storage[0]).toEqual(itemTest)
       expect(emulator.machines[findBelt(belts, 3, 0)].inventory.storage[0]).toBeNull()
@@ -536,7 +536,10 @@ describe('FactoryEmulator', () => {
 
       emulator.machines[0].inventory.storage[0] = { id: 'ore', amount: 50 }
 
-      const ticksNeeded = 52
+      // Round-robin: single belt (port.x=1) served every 3 ticks
+      // Item 1 leaves A at tick 2, then every 3 ticks after that
+      // Item 50 leaves A at tick 149, + 2 belt ticks = 151 total
+      const ticksNeeded = 155
       for (let t = 0; t < ticksNeeded; t++) {
         emulator.tick()
       }
@@ -650,7 +653,6 @@ describe('FactoryEmulator', () => {
       }, 0)
       expect(totalInSystem).toBe(50)
 
-      // Feedback loop works: B received items (items cycle through)
       const bTotal = emulator.machines[idxB].inventory.storage.reduce(
         (sum, s) => sum + (s ? s.amount : 0), 0
       )
