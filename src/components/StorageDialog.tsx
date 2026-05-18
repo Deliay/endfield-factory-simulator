@@ -1,15 +1,45 @@
-import { useState, type RefObject } from 'react'
+import { useState, useEffect, useRef, type RefObject } from 'react'
 import type { IEmulator } from '../factory/IEmulator'
 
 interface StorageDialogProps {
   machineIdx: number
-  initialStorage: ({ id: string; amount: number } | null)[]
   emulatorRef: RefObject<IEmulator | null>
   onClose: () => void
 }
 
-export function StorageDialog({ machineIdx, initialStorage, emulatorRef, onClose }: StorageDialogProps) {
-  const [items, setItems] = useState<({ id: string; amount: number } | null)[]>(initialStorage)
+export function StorageDialog({ machineIdx, emulatorRef, onClose }: StorageDialogProps) {
+  const [items, setItems] = useState<({ id: string; amount: number } | null)[]>(() => {
+    const e = emulatorRef.current
+    if (!e) return []
+    return e.machines[machineIdx].inventory.storage.map(s => s ? { ...s } : null)
+  })
+  const dirtySlots = useRef(new Set<number>())
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const e = emulatorRef.current
+      if (!e) return
+      const live = e.machines[machineIdx].inventory.storage
+      setItems(prev => {
+        let changed = false
+        const next = prev.map((slot, i) => {
+          if (dirtySlots.current.has(i)) return slot
+          const liveSlot = live[i]
+          const newSlot = liveSlot ? { ...liveSlot } : null
+          if (JSON.stringify(slot) !== JSON.stringify(newSlot)) {
+            changed = true
+          }
+          return newSlot
+        })
+        return changed ? next : prev
+      })
+    }, 100)
+    return () => clearInterval(timer)
+  }, [machineIdx, emulatorRef])
+
+  const markDirty = (i: number) => {
+    dirtySlots.current.add(i)
+  }
 
   const close = () => {
     const e = emulatorRef.current
@@ -34,6 +64,7 @@ export function StorageDialog({ machineIdx, initialStorage, emulatorRef, onClose
                 placeholder="物品ID"
                 value={slot?.id ?? ''}
                 onChange={e => {
+                  markDirty(i)
                   const copy = [...items]
                   const val = e.target.value
                   if (!val) {
@@ -53,6 +84,7 @@ export function StorageDialog({ machineIdx, initialStorage, emulatorRef, onClose
                 max={50}
                 value={slot?.amount ?? 1}
                 onChange={e => {
+                  markDirty(i)
                   const copy = [...items]
                   const val = parseInt(e.target.value) || 1
                   if (copy[i]) {

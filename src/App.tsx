@@ -7,6 +7,7 @@ import type { PlacedMachine } from './types/Factory'
 import { MachineImage } from './components/MachineImage'
 import { ToolButton } from './components/ToolButton'
 import { StorageDialog } from './components/StorageDialog'
+import { ImportExportDialog } from './components/ImportExportDialog'
 import { rotateDir, rotatePortPosition, type Dir } from './utils/rotation'
 import { FactoryEmulator } from './factory/FactoryEmulator'
 import { emulatorRegistry } from './factory/emulatorRegistry'
@@ -467,6 +468,7 @@ type AppAction =
   | { type: 'BELT_PLACE'; x: number; y: number }
   | { type: 'PLACE_MACHINE'; machineType: string; rotate: number; x: number; y: number }
   | { type: 'RESET_BELT' }
+  | { type: 'LOAD_FACTORY'; machines: PlacedMachine[] }
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -518,6 +520,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'RESET_BELT':
       return { ...state, beltStartPos: null, beltStartDir: null }
+    case 'LOAD_FACTORY':
+      return { ...state, machines: action.machines, beltStartPos: null, beltStartDir: null }
   }
 }
 
@@ -537,8 +541,9 @@ function App() {
   const [simRunning, setSimRunning] = useState(false)
   const [simTimeScale, setSimTimeScale] = useState(1)
   const [beltItems, setBeltItems] = useState<Map<string, string | null>>(new Map())
-  const [storageDialog, setStorageDialog] = useState<{ machineIdx: number; storage: ({ id: string; amount: number } | null)[] } | null>(null)
+  const [storageDialog, setStorageDialog] = useState<{ machineIdx: number } | null>(null)
   const [emulatorType, setEmulatorType] = useState('default')
+  const [importExportDialog, setImportExportDialog] = useState<'import' | 'export' | null>(null)
   const emulatorRef = useRef<IEmulator | null>(null)
   const animItemsRef = useRef<Map<string, AnimItem>>(new Map())
   const prevItemMapRef = useRef<Map<string, string | null>>(new Map())
@@ -797,6 +802,10 @@ function App() {
     setEmulatorType(e.target.value)
   }
 
+  const handleImport = (machines: PlacedMachine[]) => {
+    dispatch({ type: 'LOAD_FACTORY', machines })
+  }
+
   const handleSelectMachine = (type: string) => {
     setPlacingMachine(type)
     setPreviewPosition(null)
@@ -900,11 +909,7 @@ function App() {
           })()
         )
         if (clickedMachine !== -1 && emulatorRef.current) {
-          const m = emulatorRef.current.machines[clickedMachine]
-          setStorageDialog({
-            machineIdx: clickedMachine,
-            storage: m.inventory.storage.map(s => s ? { ...s } : null),
-          })
+          setStorageDialog({ machineIdx: clickedMachine })
         }
       }
       return
@@ -1161,6 +1166,12 @@ function App() {
         <button className="tool-button" onClick={handleCenterView}>
           居中
         </button>
+        <button className="tool-button" onClick={() => setImportExportDialog('import')}>
+          导入
+        </button>
+        <button className="tool-button" onClick={() => setImportExportDialog('export')}>
+          导出
+        </button>
         {allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
           <ToolButton
             key={machine.type}
@@ -1197,7 +1208,6 @@ function App() {
       {storageDialog && (
         <StorageDialog
           machineIdx={storageDialog.machineIdx}
-          initialStorage={storageDialog.storage}
           emulatorRef={emulatorRef}
            onClose={() => {
              if (emulatorRef.current) {
@@ -1207,6 +1217,14 @@ function App() {
              }
              setStorageDialog(null)
            }}
+        />
+      )}
+      {importExportDialog && (
+        <ImportExportDialog
+          mode={importExportDialog}
+          machines={state.machines}
+          onImport={handleImport}
+          onClose={() => setImportExportDialog(null)}
         />
       )}
 
