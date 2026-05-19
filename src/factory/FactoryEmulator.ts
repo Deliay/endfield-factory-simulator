@@ -306,7 +306,12 @@ export class FactoryEmulator implements IEmulator {
       m.inventory.storage[idx] = null
     }
     if (m.type === 'storage_box') {
-      m.nextOutPortX = (m.nextOutPortX + 1) % 3
+      let next = (m.nextOutPortX + 1) % 3
+      for (let i = 0; i < 3; i++) {
+        if (m._portMask! & (1 << next)) break
+        next = (next + 1) % 3
+      }
+      m.nextOutPortX = next
     }
     return taken
   }

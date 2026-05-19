@@ -19,6 +19,30 @@ import './machines/log_splitter'
 import './machines/log_converger'
 import './machines/log_connector'
 
+const STORAGE_KEY = 'endfield-factory-layout'
+
+function loadFromLocalStorage(): PlacedMachine[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((m: unknown): m is PlacedMachine => {
+      if (typeof m !== 'object' || m === null) return false
+      const obj = m as Record<string, unknown>
+      return typeof obj.type === 'string' && typeof obj.x === 'number' && typeof obj.y === 'number' && typeof obj.rotate === 'number'
+    })
+  } catch {
+    return []
+  }
+}
+
+function saveToLocalStorage(machines: PlacedMachine[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(machines))
+  } catch { /* ignore quota errors */ }
+}
+
 const GRID_COLS = 64
 const GRID_ROWS = 64
 const CELL_SIZE = 64
@@ -485,6 +509,7 @@ type AppAction =
   | { type: 'RESET_BELT' }
   | { type: 'DELETE_MACHINES'; indices: number[] }
   | { type: 'LOAD_FACTORY'; machines: PlacedMachine[] }
+  | { type: 'CLEAR_ALL' }
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -557,6 +582,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, beltStartPos: null, beltStartDir: null }
     case 'LOAD_FACTORY':
       return { ...state, machines: action.machines, beltStartPos: null, beltStartDir: null }
+    case 'CLEAR_ALL':
+      return { ...state, machines: [], beltStartPos: null, beltStartDir: null }
+    default:
+      return state
   }
 }
 
@@ -566,7 +595,7 @@ function App() {
     width: window.innerWidth,
     height: window.innerHeight,
   })
-  const [state, dispatch] = useReducer(appReducer, { machines: [], beltStartPos: null, beltStartDir: null })
+  const [state, dispatch] = useReducer(appReducer, { machines: loadFromLocalStorage(), beltStartPos: null, beltStartDir: null })
   const [placingMachine, setPlacingMachine] = useState<string | null>(null)
   const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null)
   const [placingRotation, setPlacingRotation] = useState(0)
@@ -584,6 +613,7 @@ function App() {
   const prevItemMapRef = useRef<Map<string, string | null>>(new Map())
   const tickIntervalRef = useRef(2000)
   const animFrameRef = useRef<number | null>(null)
+  const [toolbarTab, setToolbarTab] = useState<'tools' | 'machines'>('tools')
   const [multiSelectMode, setMultiSelectMode] = useState(false)
   const [selectedIndices, setSelectedIndices] = useState<number[]>([])
   const mouseDownTimeRef = useRef(0)
@@ -635,6 +665,7 @@ function App() {
             stageRef.current.container().style.cursor = 'default'
           }
           setMultiSelectMode(true)
+          setToolbarTab('tools')
           setSelectedIndices([])
         }
         return
@@ -683,6 +714,10 @@ function App() {
   useEffect(() => {
     simTimeScaleRef.current = simTimeScale
   }, [simTimeScale])
+
+  useEffect(() => {
+    saveToLocalStorage(state.machines)
+  }, [state.machines])
 
   useEffect(() => {
     const entry = emulatorRegistry.get(emulatorType)
@@ -1001,6 +1036,7 @@ function App() {
           const idx = findMachineAt(x, y, state.machines)
           if (idx !== -1) {
             setMultiSelectMode(true)
+            setToolbarTab('tools')
             setSelectedIndices([idx])
             return
           }
@@ -1298,60 +1334,86 @@ function App() {
         </Layer>
       </Stage>
       <div className="bottom-panel">
-        <button className="tool-button" onClick={handleCenterView}>
-          居中
-        </button>
-        <button className="tool-button" onClick={() => setImportExportDialog('import')}>
-          导入
-        </button>
-        <button className="tool-button" onClick={() => setImportExportDialog('export')}>
-          导出
-        </button>
-        {multiSelectMode && (
-          <>
-            <span className="multi-select-info">
-              多选模式 ({selectedIndices.length})
-            </span>
-            <button
-              className="tool-button danger"
-              onClick={handleMultiSelectPack}
-              disabled={selectedIndices.length === 0}
-            >
-              收纳 (F)
-            </button>
-          </>
-        )}
-        {!multiSelectMode && allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
-          <ToolButton
-            key={machine.type}
-            definition={machine}
-            isActive={placingMachine === machine.type}
-            isPlacing={placingMachine === machine.type}
-            onClick={() => handleSelectMachine(machine.type)}
-          />
-        ))}
-        <div className="sim-controls">
-          <button className="tool-button" onClick={handleSimToggle}>
-            {simRunning ? '⏸ 暂停' : '▶ 运行'}
+        <div className="toolbar-tabs">
+          <button
+            type="button"
+            className={`toolbar-tab ${toolbarTab === 'tools' ? 'active' : ''}`}
+            onClick={() => setToolbarTab('tools')}
+          >
+            工具
           </button>
-          <label className="speed-label">
-            速度: {Number(simTimeScale).toFixed(3)}x
-            <input
-              type="range"
-              min="0.001"
-              max="2"
-              step="0.001"
-               value={simTimeScale}
-               onChange={handleSimSpeedChange}
-               onDoubleClick={() => setSimTimeScale(1)}
-               className="speed-slider"
+          <button
+            type="button"
+            className={`toolbar-tab ${toolbarTab === 'machines' ? 'active' : ''}`}
+            onClick={() => setToolbarTab('machines')}
+          >
+            机器
+          </button>
+        </div>
+        <div className="toolbar-content">
+          {toolbarTab === 'tools' && (
+            <>
+              <button type="button" className="tool-button" onClick={handleCenterView}>
+                居中
+              </button>
+              <button type="button" className="tool-button" onClick={() => setImportExportDialog('import')}>
+                导入
+              </button>
+              <button type="button" className="tool-button" onClick={() => setImportExportDialog('export')}>
+                导出
+              </button>
+              <button type="button" className="tool-button danger" onClick={() => dispatch({ type: 'CLEAR_ALL' })}>
+                清空
+              </button>
+              {multiSelectMode && (
+                <>
+                  <span className="multi-select-info">
+                    多选模式 ({selectedIndices.length})
+                  </span>
+                  <button
+                    type="button"
+                    className="tool-button danger"
+                    onClick={handleMultiSelectPack}
+                    disabled={selectedIndices.length === 0}
+                  >
+                    收纳 (F)
+                  </button>
+                </>
+              )}
+              <div className="sim-controls">
+                <button type="button" className="tool-button" onClick={handleSimToggle}>
+                  {simRunning ? '⏸ 暂停' : '▶ 运行'}
+                </button>
+                <label className="speed-label">
+                  速度: {Number(simTimeScale).toFixed(3)}x
+                  <input
+                    type="range"
+                    min="0.001"
+                    max="2"
+                    step="0.001"
+                    value={simTimeScale}
+                    onChange={handleSimSpeedChange}
+                    onDoubleClick={() => setSimTimeScale(1)}
+                    className="speed-slider"
+                  />
+                </label>
+                <select className="emulator-select" value={emulatorType} onChange={handleEmulatorChange}>
+                  {emulatorRegistry.getAll().map(e => (
+                    <option key={e.type} value={e.type}>{e.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          {toolbarTab === 'machines' && !multiSelectMode && allMachines.filter(m => m.type !== 'belt_corner_en' && m.type !== 'belt_corner_ne').map(machine => (
+            <ToolButton
+              key={machine.type}
+              definition={machine}
+              isActive={placingMachine === machine.type}
+              isPlacing={placingMachine === machine.type}
+              onClick={() => handleSelectMachine(machine.type)}
             />
-          </label>
-          <select className="emulator-select" value={emulatorType} onChange={handleEmulatorChange}>
-            {emulatorRegistry.getAll().map(e => (
-              <option key={e.type} value={e.type}>{e.name}</option>
-            ))}
-          </select>
+          ))}
         </div>
       </div>
       {storageDialog && (
