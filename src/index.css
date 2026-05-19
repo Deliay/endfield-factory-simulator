@@ -124,9 +124,49 @@ code {
   border-radius: 8px 8px 0 0;
   z-index: 10;
   display: flex;
+  align-items: stretch;
+  padding: 0;
+}
+
+.toolbar-tabs {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #555;
+  padding: 8px 0;
+}
+
+.toolbar-tab {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  border-right: 2px solid transparent;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.toolbar-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toolbar-tab.active {
+  color: #0088ff;
+  border-right-color: #0088ff;
+  background: rgba(0, 136, 255, 0.08);
+}
+
+.toolbar-content {
+  flex: 1;
+  display: flex;
   align-items: center;
-  justify-content: center;
   padding: 0 16px;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .tool-button {
@@ -192,7 +232,7 @@ code {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-left: 16px;
+  margin-left: auto;
   padding-left: 16px;
   border-left: 1px solid #555;
 }
